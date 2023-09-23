@@ -43,7 +43,7 @@ def get_urls(xml):
     namespaces = {'sitemap': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
     
     for url in root.findall(".//sitemap:loc", namespaces):
-        urls.append(url.text)
+        urls.append(url.text.strip())
     return urls
 
 

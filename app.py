@@ -133,7 +133,6 @@ def home(request: Request, url: str) -> JSONResponse:
         resp = {
             "sitemap_url": url,
             "total_urls": len(urls_data),
-            "parsed_data": data,
             "urls": urls_data
         }
 
