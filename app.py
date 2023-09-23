@@ -26,7 +26,7 @@ from src.parsing.main import parse_html
 app = FastAPI(
     title="Neko Nik - Scrape API",
     description="This Scrape API is used to scrape data from the web",
-    version="1.0.0",
+    version="1.2.2",
     docs_url="/docs",
     redoc_url="/redoc",
     include_in_schema=True,
@@ -100,15 +100,15 @@ def home(request: Request, proxy: str, url: str, parse_text: bool=True) -> JSONR
     try:
         html_data = process_url(url, proxy)
         
-        if parse_text:
-            parsed_data = parse_html(url, html_data)
-        
         data = {
             "url": url,
             "proxy": proxy,
-            "html_data": html_data,
-            "parsed_data": parsed_data
+            "html_data": html_data
         }
+
+        if parse_text:
+            parsed_data = parse_html(url, html_data)
+            data["parsed_data"] = parsed_data
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,

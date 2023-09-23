@@ -41,7 +41,7 @@ def get_data(url: str, proxies: dict):
         return {"stop": "continue"}
 
 
-def process_url(url: str, proxy: dict=None, do_parsing: bool=True):
+def process_url(url: str, proxy: dict=None):
     # make a proxy parsing class 
     ip, port, username, password = proxy.split(':')
     proxie = generate_proxy_url(username, password, ip, port)
