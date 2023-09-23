@@ -14,7 +14,10 @@ import uvicorn
 # other libraries
 import json
 import re
+import requests
+import cloudscraper
 from functools import wraps
+import xml.etree.ElementTree as ET
 
 # read env variables
 import dotenv
