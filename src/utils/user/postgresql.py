@@ -2,8 +2,12 @@ from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import QueuePool  # Import the QueuePool
+from src.utils.base.basic import retry
+
 
 Base = declarative_base()
+
 
 class UserDB(Base):
     __tablename__ = 'users'
@@ -16,10 +20,12 @@ class UserDB(Base):
     tier = Column(String(100), default="FREE")  # FREE, PERSONAL, BUSINESS, ENTERPRISE
 
 
+@retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2 )
 class PostgreSQLCRUD:
     def __init__(self):
-        db_url = "postgresql://test_user:neko@65.109.162.178:5432/test_db"
-        self.engine = create_engine(db_url)
+        # db_url = "postgresql://test_user:neko@65.109.162.178:5432/test_db"    # Jiffy Scraper Server
+        db_url = "postgresql://nikhil:neko@192.168.1.90:5445/nikhil"    # Kuro Neko Server
+        self.engine = create_engine(db_url, poolclass=QueuePool, pool_size=10, max_overflow=20)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
@@ -78,16 +84,18 @@ class PostgreSQLCRUD:
         except SQLAlchemyError as e:
             print(f"Error: {e}")
 
-# if __name__ == "__main__":
-#     db = PostgreSQLCRUD()
+
+
+if __name__ == "__main__":
+    db = PostgreSQLCRUD()
 
 #     # Create user records
-#     db.create("john@example.com", "John Doe", "uid123", 1, 100, "FREE")
+    db.create("john@example.com", "John Doe", "uid123", 1, 100, "FREE")
 #     db.create("jane@example.com", "Jane Smith", "uid456", 1, 150, "PERSONAL")
 
 #     # Read user records
-#     records = db.read()
-#     print("Read user records:", records)
+    records = db.read()
+    print("Read user records:", records)
 
 #     # Update a user record
 #     db.update("john@example.com", {"points": 400})

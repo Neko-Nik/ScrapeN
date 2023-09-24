@@ -8,6 +8,7 @@ from src.utils.base.libraries import (
     Depends,
     Jinja2Templates,
     CORSMiddleware,
+    BackgroundTasks,
     Request,
     JSONResponse,
     HTMLResponse,
@@ -18,11 +19,10 @@ from src.utils.base.libraries import (
     status
 )
 from src.utils.base.constants import NUMBER_OF_LOGS_TO_DISPLAY
-from src.scraping.main import process_url
 from src.sitemap.main import get_urls_from_xml
-from src.parsing.main import parse_html
 from src.utils.user.auth import get_user_token
 from src.utils.user.handler import User
+from src.scraping.main import WebScraper
 
 
 # Initialization
@@ -99,21 +99,11 @@ def test_auth(request: Request, user: dict=Depends(get_user_token)) -> JSONRespo
     """
     This endpoint is used to test authentication
     """
-    import time
-    start = time.time()
     user_obj = User()
-    end = time.time()
-    print(f"Time taken to create user object: {end - start}")
 
-    user, stripe_data, stripe_plan = user_obj.handle_user_creation_get(user["email"], user["name"], user["uid"], user["email_verified"], 100, "FREE")
-    has_access = user_obj.deduct_points(user[0])
+    user, stripe_data, stripe_plan = user_obj.handle_user_creation_get(user["email"], user["name"], user["uid"], user["email_verified"])
 
 
-    if not has_access:
-        return JSONResponse(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            content={"message": "You have no points left. Please upgrade your plan. Or contact us to get more points."}
-        )
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -128,27 +118,19 @@ def test_auth(request: Request, user: dict=Depends(get_user_token)) -> JSONRespo
 
 
 # Scrape data from the given URL with the given proxy
-@app.get("/scrape", response_class=JSONResponse, tags=["Scrape"], summary="Scrape data from the given URL with the given proxy")
-def home(request: Request, proxy: str, url: str, parse_text: bool=True) -> JSONResponse:
+@app.post("/scrape", response_class=JSONResponse, tags=["Scrape"], summary="Scrape data from the given URL with the given proxy")
+def scrape_websites(request: Request, background_tasks: BackgroundTasks, urls: list, proxies: list, parse_text: bool=True, parallel: int=10) -> JSONResponse:
     """
     This endpoint is used to scrape data from the given URL with the given proxy
     """
     try:
-        html_data = process_url(url, proxy)
-        
-        data = {
-            "url": url,
-            "proxy": proxy,
-            "html_data": html_data
-        }
+        scraper_obj = WebScraper(num_workers=parallel, do_parse_html=parse_text, output_dir="output/new")
 
-        if parse_text:
-            parsed_data = parse_html(url, html_data)
-            data["parsed_data"] = parsed_data
+        scraper_obj.scrape_urls(urls=urls, proxies_list=proxies)
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content=data
+            content={"message": "Done"}
         )
     except Exception as exc_info:
         logging.error(exc_info)

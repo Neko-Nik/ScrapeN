@@ -6,7 +6,7 @@ any new library should be added here and imported in the respective files
 # FastAPI libraries
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse , PlainTextResponse , HTMLResponse
-from fastapi import FastAPI, File, UploadFile , Form, Request, status, Response, Depends
+from fastapi import FastAPI, File, UploadFile , Form, Request, status, Response, Depends, BackgroundTasks
 from fastapi.templating import Jinja2Templates
 import uvicorn
 
@@ -14,8 +14,11 @@ import uvicorn
 # other libraries
 import json
 import re
+import time
 import requests
+import threading
 import cloudscraper
+from pydantic import BaseModel
 from functools import wraps
 import xml.etree.ElementTree as ET
 
