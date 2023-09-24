@@ -19,17 +19,16 @@ from src.utils.base.libraries import (
     status
 )
 from src.utils.base.constants import NUMBER_OF_LOGS_TO_DISPLAY
-from src.sitemap.main import get_urls_from_xml
+from src.main import render_sitemap, render_scrape
 from src.utils.user.auth import get_user_token
 from src.utils.user.handler import User
-from src.scraping.main import WebScraper
 
 
 # Initialization
 app = FastAPI(
     title="Neko Nik - Scrape API",
     description="This Scrape API is used to scrape data from the web",
-    version="1.3.4",
+    version="1.5.2",
     docs_url="/docs",
     redoc_url="/redoc",
     include_in_schema=True,
@@ -100,38 +99,54 @@ def test_auth(request: Request, user: dict=Depends(get_user_token)) -> JSONRespo
     This endpoint is used to test authentication
     """
     user_obj = User()
-
     user, stripe_data, stripe_plan = user_obj.handle_user_creation_get(user["email"], user["name"], user["uid"], user["email_verified"])
-
-
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={"user": user, "stripe_data": stripe_data, "stripe_plan": stripe_plan}
     )
 
-
-
+# Get user data - nothing but the handle_user_creation_get
 # update user data
+    # - if user changes the email, then update the email in the user table
+    # - if user changes the name, then update the name in the user table
+    # - if user changes the plan, then update the plan in the user table
+    # - if user updates the points, then update the points in the user table
 # Delete account
+
 
 
 
 # Scrape data from the given URL with the given proxy
 @app.post("/scrape", response_class=JSONResponse, tags=["Scrape"], summary="Scrape data from the given URL with the given proxy")
-def scrape_websites(request: Request, background_tasks: BackgroundTasks, urls: list, proxies: list, parse_text: bool=True, parallel: int=10) -> JSONResponse:
+def scrape_websites(request: Request, background_tasks: BackgroundTasks, urls: list, proxies: list, 
+                    user: dict=Depends(get_user_token), parse_text: bool=True) -> JSONResponse:
     """
     This endpoint is used to scrape data from the given URL with the given proxy
     """
     try:
-        scraper_obj = WebScraper(num_workers=parallel, do_parse_html=parse_text, output_dir="output/new")
+        # TODO: handle parallel requests based on user data
+        # if user is good to go then only do the scraping
+        user_obj = User()
+        user_db_data = user_obj.read(user["email"])
+        points = user_db_data[0][4]
+        parallel = user_db_data[0][5]
+        if parallel == "FREE":
+            parallel = 1
+        else:
+            parallel = 3
+        if user_db_data and user_db_data[0][3] == 1 and points > len(urls):
+            background_tasks.add_task(render_scrape, urls=urls, proxies=proxies, parse_text=parse_text, parallel=parallel, user=user)
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"message": "Job started"}
+            )
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_412_PRECONDITION_FAILED,
+                content={"message": "User is not active or not enough points"}
+            )
 
-        scraper_obj.scrape_urls(urls=urls, proxies_list=proxies)
-
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"message": "Done"}
-        )
     except Exception as exc_info:
         logging.error(exc_info)
         raise All_Exceptions(
@@ -147,17 +162,11 @@ def home(request: Request, url: str) -> JSONResponse:
     This endpoint is used to get List of URL, given sitemap URL (XML)
     """
     try:
-        urls_data = get_urls_from_xml(url)
-        
-        resp = {
-            "sitemap_url": url,
-            "total_urls": len(urls_data),
-            "urls": urls_data
-        }
+        urls_data = render_sitemap(url=url)
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content=resp
+            content=urls_data
         )
     except Exception as exc_info:
         logging.error(exc_info)

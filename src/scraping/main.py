@@ -1,8 +1,9 @@
 import concurrent.futures
-from src.utils.base.libraries import logging, cloudscraper, requests, os, threading, json
+from src.utils.base.libraries import logging, cloudscraper, requests, os, threading, json, datetime, urllib
 from src.utils.base.basic import Error
-from src.utils.base.constants import LIST_OF_SKIP_CODES
+from src.utils.base.constants import LIST_OF_SKIP_CODES, OUTPUT_ROOT_DIR
 from src.scraping.parsing import parse_html
+from src.utils.user.postgresql import ProcessPostgreSQLCRUD, UserPostgreSQLCRUD
 
 
 class WebScraper:
@@ -12,6 +13,12 @@ class WebScraper:
         self.urls_lock = threading.Lock()  # Lock for accessing the URLs list
         self.do_parse_html = do_parse_html
         self.output_dir = output_dir
+
+        # Processed data
+        self.urls_scraped = []
+        self.urls_failed = []
+        self.proxies_used = []
+        self.proxies_failed = []
 
     @staticmethod
     def save_as_json(data, filename):
@@ -64,7 +71,12 @@ class WebScraper:
             proxy_data = self.generate_proxy_url(username, password, ip, port)
             data = self.get_data(url, proxy_data)
             if not isinstance(data, Error):
+                self.proxies_used.append(proxy)
+                self.urls_scraped.append(url)
                 break  # If data is not an error, we have successfully retrieved the data
+            else:
+                self.proxies_failed.append(proxy)
+                self.urls_failed.append(url)
         return data
     
 
@@ -81,7 +93,7 @@ class WebScraper:
 
 
 
-    def scrape_urls(self, urls: list, proxies_list: list):
+    def scrape_urls(self, urls: list, proxies_list: list) -> dict:
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = []
             for url in urls:
@@ -95,85 +107,173 @@ class WebScraper:
                 if not isinstance(data, Error):
                     self._post_process_data(data, url)
 
+        # Once all the URLs are processed, remove the duplicates
+        self.urls_scraped = list(set(self.urls_scraped))
+        self.urls_failed = list(set(self.urls_failed))
+        self.proxies_used = list(set(self.proxies_used))
+        self.proxies_failed = list(set(self.proxies_failed))
+
+        return {
+            "urls_scraped": self.urls_scraped,
+            "urls_failed": self.urls_failed,
+            "proxies_used": self.proxies_used,
+            "proxies_failed": self.proxies_failed
+        }
 
 
-# Usage Example:
-if __name__ == "__main__":
-    # Initialize the WebScraper class with the desired number of workers
-    scraper = WebScraper(num_workers=1, output_dir="output/new/", do_parse_html=True)
+class ProcessJob:
+    def __init__(self, urls: list, proxies: list, parse_text: bool = True, parallel: int = 1, user: dict = {}):
+        self.process_crud = ProcessPostgreSQLCRUD()
+        self.user_crud = UserPostgreSQLCRUD()
+        self.urls = urls
+        self.proxies = proxies
+        self.parse_text = parse_text
+        self.parallel = parallel
+        self.process_id = None
+        self.folder_path = None
+        self.user = user
 
-    data_1 = {
-  "urls": [
-    "https://quickbooks.intuit.com/accountants/resources/marketing-hub/video/create-social-media-content/",
-    "https://quickbooks.intuit.com/time-tracking/resources/affordable-care-act-benefits/",
-    "https://quickbooks.intuit.com/desktop/enterprise/payroll-and-payments/",
-    "https://quickbooks.intuit.com/time-tracking/resources/rotating-shifts/",
-    "https://quickbooks.intuit.com/time-tracking/remote-employees/",
-    "https://quickbooks.intuit.com/time-tracking/gps-survey/2019-survey/",
-    "https://quickbooks.intuit.com/payroll/healthcare/",
-    "https://quickbooks.intuit.com/time-tracking/resources/guide-to-employee-time-tracking/",
-    "https://quickbooks.intuit.com/accountants/news-community/",
-    "https://quickbooks.intuit.com/accounting/inventory/",
-    "https://quickbooks.intuit.com/cas/dam/DOCUMENT/A6ZsJ3mwX/Social-Media-Guide_Facebook-LinkedIn-and-Twitter.pdf/",
-    "https://quickbooks.intuit.com/cas/dam/DOCUMENT/A89VmPpDg/QuickBooks-Desktop-to-Online-Conversion-Checklist.pdf/",
-    "https://quickbooks.intuit.com/desktop/enterprise/resources/switch-to-enterprise/diamond/",
-    "https://quickbooks.intuit.com/time-tracking/app-marketplace/knowify/",
-    "https://quickbooks.intuit.com/time-tracking/flsa/working-off-the-clock/",
-    "https://quickbooks.intuit.com/desktop/enterprise/industry-solutions/",
-    "https://quickbooks.intuit.com/time-tracking/flsa/overtime-pay-rules/",
-    "https://quickbooks.intuit.com/online/advanced/resources/forrester-tei-report-2022/",
-    "https://quickbooks.intuit.com/cas/dam/DOCUMENT/A6IblY07m/Changes-to-Workers-Compensation-Tracking-during-COVID.pdf/",
-    "https://quickbooks.intuit.com/desktop/enterprise/resources/faq/",
-    "https://quickbooks.intuit.com/time-tracking/time-card-payroll-reports/",
-    "https://quickbooks.intuit.com/accountants/resources/marketing-hub/article/how-to-identify-connect-and-get-referrals/",
-    "https://quickbooks.intuit.com/time-tracking/non-profit/",
-    "https://quickbooks.intuit.com/payroll/manufacturing/"
-],
-  "proxies": ["216.19.217.132:6372:olmjtxsz:yccmlx17olxs",
-"134.73.64.103:6388:olmjtxsz:yccmlx17olxs",
-"107.181.143.40:6171:olmjtxsz:yccmlx17olxs",
-"184.174.24.212:6788:olmjtxsz:yccmlx17olxs",
-"216.173.120.131:6423:olmjtxsz:yccmlx17olxs",
-"154.92.112.84:5105:olmjtxsz:yccmlx17olxs",
-"64.137.57.144:6153:olmjtxsz:yccmlx17olxs",
-"184.174.46.130:5759:olmjtxsz:yccmlx17olxs",
-"184.174.126.249:6541:olmjtxsz:yccmlx17olxs",
-"188.74.168.200:5241:olmjtxsz:yccmlx17olxs",
-"216.173.75.53:6354:olmjtxsz:yccmlx17olxs",
-"198.105.101.140:5769:olmjtxsz:yccmlx17olxs",
-"38.153.152.181:9531:olmjtxsz:yccmlx17olxs",
-"104.239.81.95:6630:olmjtxsz:yccmlx17olxs",
-"38.154.224.19:6560:olmjtxsz:yccmlx17olxs",
-"103.53.219.17:6110:olmjtxsz:yccmlx17olxs",
-"38.154.191.20:8597:olmjtxsz:yccmlx17olxs",
-"104.223.157.49:6288:olmjtxsz:yccmlx17olxs",
-"104.143.252.223:5837:olmjtxsz:yccmlx17olxs",
-"104.239.13.14:6643:olmjtxsz:yccmlx17olxs",
-"104.239.91.144:5868:olmjtxsz:yccmlx17olxs",
-"45.192.136.127:5421:olmjtxsz:yccmlx17olxs",
-"104.239.84.51:6086:olmjtxsz:yccmlx17olxs",
-"64.137.60.156:5220:olmjtxsz:yccmlx17olxs",
-"136.0.109.9:5603:olmjtxsz:yccmlx17olxs",
-"104.239.3.92:6052:olmjtxsz:yccmlx17olxs",
-"45.56.175.227:5901:olmjtxsz:yccmlx17olxs",
-"161.123.152.124:6369:olmjtxsz:yccmlx17olxs",
-"192.210.132.204:6174:olmjtxsz:yccmlx17olxs",
-"216.173.75.153:6454:olmjtxsz:yccmlx17olxs",
-"107.179.60.64:5096:olmjtxsz:yccmlx17olxs",
-"45.41.177.24:5674:olmjtxsz:yccmlx17olxs",
-"45.192.145.10:5352:olmjtxsz:yccmlx17olxs",
-"198.144.190.110:5957:olmjtxsz:yccmlx17olxs",
-"104.239.73.146:6689:olmjtxsz:yccmlx17olxs",
-"107.179.26.234:6304:olmjtxsz:yccmlx17olxs",
-"154.95.36.164:6858:olmjtxsz:yccmlx17olxs",
-"38.154.217.181:7372:olmjtxsz:yccmlx17olxs"]
-}
+    def _string_connvert(self, date: str):
+        date = str(date)
+        # Each digit change to A, B, C, etc
+        date = date.replace("0", "A")
+        date = date.replace("1", "B")
+        date = date.replace("2", "C")
+        date = date.replace("3", "D")
+        date = date.replace("4", "E")
+        date = date.replace("5", "F")
+        date = date.replace("6", "G")
+        date = date.replace("7", "H")
+        date = date.replace("8", "I")
+        date = date.replace("9", "J")
+        return date
+    
+    def _job_id_decoder(self, date: str):
+        date = str(date)
+        # Each digit change to A, B, C, etc
+        date = date.replace("A", "0")
+        date = date.replace("B", "1")
+        date = date.replace("C", "2")
+        date = date.replace("D", "3")
+        date = date.replace("E", "4")
+        date = date.replace("F", "5")
+        date = date.replace("G", "6")
+        date = date.replace("H", "7")
+        date = date.replace("I", "8")
+        date = date.replace("J", "9")
+        # give back the clear format of date
+        date = datetime.strptime(date, "%Y%m%d%H%M%S")
+        date = date.strftime("%Y-%m-%d %H:%M:%S")
+        return date
 
-    # List of URLs to scrape
-    urls_to_scrape = data_1['urls']
+    def make_job_id(self):
+        """This job id is unique for each user"""
+        current_time = datetime.now()
+        # Format the current time as a string
+        formatted_time = current_time.strftime("%Y%m%d%H%M%S")
+        # Convert the string to a unique string
+        job_id = self._string_connvert(formatted_time)
 
-    # List of proxy information in the format: "ip:port:username:password"
-    proxies = data_1['proxies']
+        self.process_id = job_id
+        self.folder_path = os.path.join(OUTPUT_ROOT_DIR, self.user["email"],job_id)
 
-    # Start scraping
-    scraper.scrape_urls(urls_to_scrape, proxies)
+    def _has_file_extension(self, url: str):
+        """Check if the given URL has a file extension"""
+        parsed_url = urllib.parse.urlparse(url)
+        path = parsed_url.path
+        # Split the path by "." and check if the last part has a file extension
+        parts = path.split(".")
+        if len(parts) > 1:
+            return True
+        return False
+
+    def handle_file_based_urls(self):
+        """Handle the file based URLs"""
+        self.urls = [url for url in self.urls if not self._has_file_extension(url)]
+
+    def push_to_db(self):
+        """Push the data to the database"""
+        user_email = self.user["email"]
+        created_at = datetime.now()
+        created_at = created_at.strftime("%Y-%m-%d %H:%M:%S")
+
+        self.process_crud.create(
+            process_id=user_email + self.process_id,
+            user_email=user_email,
+            status="processing",
+            urls=self.urls,
+            proxies=self.proxies,
+            created_at=created_at,
+            parse_text=1 if self.parse_text else 0,
+            parallel_count=self.parallel
+        )
+    
+    def reduce_points(self):
+        """Reduce the points from the user"""
+        # get the current points
+        # check if the points are greater than the given points
+        # if yes, reduce the points and return True
+        # else return False and set the process status as failed due to insufficient points
+        points = len(self.urls)
+        user_email = self.user["email"]
+        user = self.user_crud.read(user_email)
+        if user:
+            current_points = user[0][4]
+            if current_points >= points:
+                new_points = current_points - points
+                self.user_crud.update(user_email, {"points": new_points})
+                return True
+            else:
+                self.process_crud.update(user_email + self.process_id, {"status": "failed due to insufficient points"})
+                return False
+        else:
+            self.process_crud.update(user_email + self.process_id, {"status": "failed due to insufficient points"})
+            return False
+
+    def run(self):
+        """Run the process"""
+        self.make_job_id()
+        self.handle_file_based_urls()
+        self.reduce_points()
+        self.push_to_db()
+
+        return {
+            "process_id": self.process_id,
+            "folder_path": self.folder_path,
+            "urls": self.urls,
+            "proxies": self.proxies,
+            "parse_text": self.parse_text,
+            "parallel": self.parallel
+        }
+    
+    def update(self,scrape_results):
+        """Update the process"""
+        # update the status in db as zipping
+        self.process_crud.update(self.user["email"] + self.process_id, {
+            "status": "zipping",
+            "file_path": self.folder_path,
+            "urls_scraped": scrape_results["urls_scraped"],
+            "urls_failed": scrape_results["urls_failed"],
+            "proxies_used": scrape_results["proxies_used"],
+            "proxies_failed": scrape_results["proxies_failed"]
+        })
+        
+        # increase the points by the number of urls not scraped
+        # sometimes urls failed has urls that are scraped so we need to remove them
+        urls_scraped = scrape_results["urls_scraped"]
+        urls_failed = scrape_results["urls_failed"]
+        # remove success from the failed list
+        urls_done = [url for url in urls_failed if url not in urls_scraped]
+
+        # increase the points by the number of urls not scraped
+        points = len(urls_done)
+        user_email = self.user["email"]
+        user = self.user_crud.read(user_email)
+        if user:
+            current_points = user[0][4]
+            new_points = current_points + points
+            self.user_crud.update(user_email, {"points": new_points})
+        else:
+            self.process_crud.update(user_email + self.process_id, {"status": "failed due to user not found"})
+            return False
+

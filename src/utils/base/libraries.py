@@ -18,6 +18,8 @@ import time
 import requests
 import threading
 import cloudscraper
+import urllib.parse
+from datetime import datetime
 from pydantic import BaseModel
 from functools import wraps
 import xml.etree.ElementTree as ET

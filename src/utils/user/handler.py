@@ -1,4 +1,4 @@
-from src.utils.user.postgresql import PostgreSQLCRUD
+from src.utils.user.postgresql import UserPostgreSQLCRUD
 from src.utils.user.stripe_manager import StripeManager
 from src.utils.base.basic import Error
 from src.utils.base.basic import retry
@@ -6,7 +6,7 @@ from src.utils.base.basic import retry
 
 class User:
     def __init__(self):
-        self.db = PostgreSQLCRUD()
+        self.db = UserPostgreSQLCRUD()
         self.stripe = StripeManager()
 
 

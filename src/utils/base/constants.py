@@ -19,7 +19,6 @@ CONFIG_FILE_PATH = os.path.join(os.getcwd(), 'config.cfg')
 config.read(CONFIG_FILE_PATH)
 ## Main config data
 log_config_data = config['log']
-paths_config_data = config['paths']
 scraping_config_data = config['scraping']
 
 
@@ -30,12 +29,10 @@ LOG_LEVEL = int( log_config_data.get('LOG_LEVEL', 40 ) )
 LOG_FILE_PATH = log_config_data.get('LOG_FILE_PATH', 'logs/log.txt' )
 NUMBER_OF_LOGS_TO_DISPLAY = int( log_config_data.get('NUMBER_OF_LOGS_TO_DISPLAY', 100 ) )
 
-## paths variables
-OUTPUT_FILES_DIR = paths_config_data.get('OUTPUT_FILES_DIR', 'output_files' )
-INPUT_FILES_DIR = paths_config_data.get('INPUT_FILES_DIR', 'input_files' )
 
 ## scraping variables
 LIST_OF_SKIP_CODES = scraping_config_data.get('LIST_OF_SKIP_CODES', '404,500' ).split(',')
+OUTPUT_ROOT_DIR = scraping_config_data.get('OUTPUT_ROOT_DIR', 'output_files' )
 
 # Other constants
 
