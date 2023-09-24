@@ -5,6 +5,7 @@ This file is used to run the API
 
 from src.utils.base.libraries import (
     FastAPI,
+    Depends,
     Jinja2Templates,
     CORSMiddleware,
     Request,
@@ -20,13 +21,15 @@ from src.utils.base.constants import NUMBER_OF_LOGS_TO_DISPLAY
 from src.scraping.main import process_url
 from src.sitemap.main import get_urls_from_xml
 from src.parsing.main import parse_html
+from src.utils.user.auth import get_user_token
+from src.utils.user.handler import User
 
 
 # Initialization
 app = FastAPI(
     title="Neko Nik - Scrape API",
     description="This Scrape API is used to scrape data from the web",
-    version="1.2.2",
+    version="1.3.4",
     docs_url="/docs",
     redoc_url="/redoc",
     include_in_schema=True,
@@ -91,8 +94,41 @@ def view_logs(request: Request) -> HTMLResponse:
 
 
 
+@app.get("/test_auth", response_class=JSONResponse, tags=["Test"], summary="Test authentication")
+def test_auth(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to test authentication
+    """
+    import time
+    start = time.time()
+    user_obj = User()
+    end = time.time()
+    print(f"Time taken to create user object: {end - start}")
+
+    user, stripe_data, stripe_plan = user_obj.handle_user_creation_get(user["email"], user["name"], user["uid"], user["email_verified"], 100, "FREE")
+    has_access = user_obj.deduct_points(user[0])
+
+
+    if not has_access:
+        return JSONResponse(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            content={"message": "You have no points left. Please upgrade your plan. Or contact us to get more points."}
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"user": user, "stripe_data": stripe_data, "stripe_plan": stripe_plan}
+    )
+
+
+
+# update user data
+# Delete account
+
+
+
 # Scrape data from the given URL with the given proxy
-@app.get("/scrape", response_class=HTMLResponse, tags=["Scrape"], summary="Scrape data from the given URL with the given proxy")
+@app.get("/scrape", response_class=JSONResponse, tags=["Scrape"], summary="Scrape data from the given URL with the given proxy")
 def home(request: Request, proxy: str, url: str, parse_text: bool=True) -> JSONResponse:
     """
     This endpoint is used to scrape data from the given URL with the given proxy
@@ -121,8 +157,9 @@ def home(request: Request, proxy: str, url: str, parse_text: bool=True) -> JSONR
             status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
 # Get List of URL, given sitemap URL (XML)
-@app.get("/sitemap", response_class=HTMLResponse, tags=["Sitemap"], summary="Get List of URL, given sitemap URL (XML)")
+@app.get("/sitemap", response_class=JSONResponse, tags=["Sitemap"], summary="Get List of URL, given sitemap URL (XML)")
 def home(request: Request, url: str) -> JSONResponse:
     """
     This endpoint is used to get List of URL, given sitemap URL (XML)
@@ -145,6 +182,9 @@ def home(request: Request, url: str) -> JSONResponse:
         raise All_Exceptions(
             "Something went wrong",
             status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 
 
 if __name__ == '__main__':
