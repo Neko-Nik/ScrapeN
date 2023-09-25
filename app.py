@@ -23,13 +23,14 @@ from src.main import render_sitemap, render_scrape
 from src.utils.user.auth import get_user_token
 from src.utils.user.handler import User
 from src.scraping.main import ProcessJob
+from src.utils.user.postgresql import ProcessPostgreSQLCRUD
 
 
 # Initialization
 app = FastAPI(
     title="Neko Nik - Scrape API",
     description="This Scrape API is used to scrape data from the web",
-    version="1.5.9",
+    version="1.6.1",
     docs_url="/docs",
     redoc_url="/redoc",
     include_in_schema=True,
@@ -54,7 +55,8 @@ class All_Exceptions(Exception):
         self.message = message
         self.status_code = status_code
 
-# 
+
+# Exception handler for wrong input
 @app.exception_handler(All_Exceptions)
 async def input_data_exception_handler(request: Request, exc: All_Exceptions):    
     return JSONResponse(
@@ -126,6 +128,7 @@ def get_user_data(request: Request, user: dict=Depends(get_user_token)) -> JSONR
 
 # @app.put("/user", response_class=JSONResponse, tags=["User"], summary="Update user data")
 # update user data
+    # - Do stripe webhooks also for updating the user data
     # - if user changes the email, then update the email in the user table
     # - if user changes the name, then update the name in the user table
     # - if user changes the plan, then update the plan in the user table
@@ -195,18 +198,20 @@ def scrape_websites(request: Request, background_tasks: BackgroundTasks, urls: l
 
 
 
-# Get List of URL, given sitemap URL (XML)
-@app.get("/sitemap", response_class=JSONResponse, tags=["Sitemap"], summary="Get List of URL, given sitemap URL (XML)")
-def home(request: Request, url: str) -> JSONResponse:
+# Scrape status of the given job id
+@app.get("/scrape", response_class=JSONResponse, tags=["Scrape"], summary="Scrape status of the given job id")
+def scrape_status(request: Request, job_id: str, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
-    This endpoint is used to get List of URL, given sitemap URL (XML)
+    This endpoint is used to scrape status of the given job id
     """
     try:
-        urls_data = render_sitemap(url=url)
+        job_id = user["email"] + "|" + job_id
+        process_obj = ProcessPostgreSQLCRUD()
+        job_data = process_obj.read(job_id)
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content=urls_data
+            content={"job_data": job_data}
         )
     except Exception as exc_info:
         logging.error(exc_info)
@@ -215,6 +220,21 @@ def home(request: Request, url: str) -> JSONResponse:
             status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
+# Get List of URL, given sitemap URL (XML)
+@app.get("/sitemap", response_class=JSONResponse, tags=["Sitemap"], summary="Get List of URL, given sitemap URL (XML)")
+def get_sitemap_urls(request: Request, url: str, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to get List of URL, given sitemap URL (XML)
+    """
+    try:
+        urls_data = render_sitemap(url=url)
+        # also add logging to user table
+        logging.info(urls_data)
+        return JSONResponse( status_code=status.HTTP_200_OK, content=urls_data )
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
 
