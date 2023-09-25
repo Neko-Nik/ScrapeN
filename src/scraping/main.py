@@ -204,7 +204,7 @@ class ProcessJob:
             urls=self.urls,
             proxies=self.proxies,
             created_at=created_at,
-            parse_text=1 if self.parse_text else 0,
+            parse_text=self.parse_text,
             parallel_count=self.parallel
         )
     

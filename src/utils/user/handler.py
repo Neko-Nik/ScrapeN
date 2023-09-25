@@ -30,14 +30,13 @@ class User:
         self.db.delete(email)
 
 
-    def handle_user_creation_get(self, email, name=None, uid=None, is_active=None, points=100, tier="FREE"):
+    def handle_user_creation_get(self, email, name=None, uid=None, is_active=False, points=100, tier="FREE"):
         try:
             user = self.read(email)
             stripe_data = None
             stripe_plan = None
 
             if not user:
-                is_active = 1 if is_active else 0
                 self.create(email, name, uid, is_active, points, tier)
                 user = self.read(email)
                 # TODO - Do retry logic here

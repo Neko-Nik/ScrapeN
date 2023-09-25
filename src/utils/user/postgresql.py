@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import TEXT, BOOLEAN
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import QueuePool
@@ -16,7 +16,7 @@ class UserDB(Base):
     email = Column(String(255), primary_key=True)
     name = Column(String(255), nullable=True)
     uid = Column(String(255), nullable=False)
-    is_active = Column(Integer, default=1)
+    is_active = Column(BOOLEAN, default=False)
     points = Column(Integer, default=0)   # 0 points means user is not created in Stripe
     tier = Column(String(100), default="FREE")  # FREE, PERSONAL, BUSINESS, ENTERPRISE
 
@@ -96,15 +96,15 @@ class ProcessDB(Base):
     process_id = Column(String(255), primary_key=True)
     user_email = Column(String(255), ForeignKey('users.email'), nullable=False)
     status = Column(String(255), nullable=False)
-    urls = Column(JSON, nullable=False)
-    proxies = Column(JSON, nullable=False)
+    urls = Column(TEXT, nullable=False)
+    proxies = Column(TEXT, nullable=False)
     created_at = Column(String(255), nullable=False)
-    parse_text = Column(Integer, default=1)
+    parse_text = Column(BOOLEAN, default=True)
     parallel_count = Column(Integer, default=1)
-    urls_scraped = Column(Integer, default=0)
-    urls_failed = Column(Integer, default=0)
-    proxies_used = Column(Integer, default=0)
-    proxies_failed = Column(Integer, default=0)
+    urls_scraped = Column(TEXT, default="")
+    urls_failed = Column(TEXT, default="")
+    proxies_used = Column(TEXT, default="")
+    proxies_failed = Column(TEXT, default="")
     file_path = Column(String(255), nullable=True)
     file_hash = Column(String(255), nullable=True)
 
