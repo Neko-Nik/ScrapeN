@@ -277,3 +277,8 @@ class ProcessJob:
             self.process_crud.update(user_email + self.process_id, {"status": "failed due to user not found"})
             return False
 
+    def failed(self):
+        """Update the process as failed"""
+        self.process_crud.update(self.user["email"] + '|' + self.process_id, {"status": "failed"})
+        return True
+    

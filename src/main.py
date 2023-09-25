@@ -33,5 +33,7 @@ def render_scrape(urls: list, proxies: list, job_obj: ProcessJob, parse_text: bo
 
     # Zip the output folder and verify the hash
     file_path, file_hash = zip_folder_and_verify(folder_path=job_data["folder_path"])
+    if not file_path or not file_hash:
+        job_obj.failed()
 
     # TODO: Given the file path and file hash, update the job with the file path and hash and set status as done and download link

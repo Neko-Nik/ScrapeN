@@ -39,8 +39,12 @@ class User:
             if not user:
                 self.create(email, name, uid, is_active, points, tier, parallel_count)
                 user = self.read(email)
-                # TODO - Do retry logic here
-                # handle stripe customer creation
+
+                stripe_data = self.stripe.create_stripe_customer(email)
+                stripe_plan = self.stripe.get_current_plan(email)
+            
+            if user[0][5] == "DELETED":
+                self.update(email, {"points": points, "tier": tier, "parallel_count": parallel_count, "is_active": is_active})
                 stripe_data = self.stripe.create_stripe_customer(email)
                 stripe_plan = self.stripe.get_current_plan(email)
 
@@ -51,7 +55,7 @@ class User:
 
     def handle_user_deletion(self, email):
         try:
-            self.delete(email)
+            self.update(email, {"points": -1, "tier": "DELETED", "parallel_count": 0, "is_active": False})
             self.stripe.delete_stripe_customer(email)
             return True
         except Exception as err:

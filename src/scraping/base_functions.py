@@ -6,7 +6,8 @@ import hashlib
 def zip_folder_and_verify(folder_path):
     # Check if the folder exists
     if not os.path.exists(folder_path):
-        return None
+        # Means there is not even one url processed successfully
+        return None, None
 
     # Create a zip file with the same name as the folder
     zip_filename = f"{folder_path}.zip"

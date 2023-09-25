@@ -29,7 +29,7 @@ from src.scraping.main import ProcessJob
 app = FastAPI(
     title="Neko Nik - Scrape API",
     description="This Scrape API is used to scrape data from the web",
-    version="1.5.7",
+    version="1.5.9",
     docs_url="/docs",
     redoc_url="/redoc",
     include_in_schema=True,
@@ -94,10 +94,10 @@ def view_logs(request: Request) -> HTMLResponse:
 
 
 
-@app.get("/test_auth", response_class=JSONResponse, tags=["Test"], summary="Test authentication")
-def test_auth(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
+@app.post("/user", response_class=JSONResponse, tags=["User"], summary="Create a new user")
+def create_user(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
-    This endpoint is used to test authentication
+    This endpoint is used to create a new user
     """
     user_obj = User()
     user, stripe_data, stripe_plan = user_obj.handle_user_creation_get(user["email"], user["name"], user["uid"], user["email_verified"])
@@ -107,14 +107,51 @@ def test_auth(request: Request, user: dict=Depends(get_user_token)) -> JSONRespo
         content={"user": user, "stripe_data": stripe_data, "stripe_plan": stripe_plan}
     )
 
-# Get user data - nothing but the handle_user_creation_get
+
+
+@app.get("/user", response_class=JSONResponse, tags=["User"], summary="Get user data")
+def get_user_data(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to get user data
+    """
+    user_obj = User()
+    user_db_data = user_obj.read(user["email"])
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"user": user_db_data}
+    )
+
+
+
+# @app.put("/user", response_class=JSONResponse, tags=["User"], summary="Update user data")
 # update user data
     # - if user changes the email, then update the email in the user table
     # - if user changes the name, then update the name in the user table
     # - if user changes the plan, then update the plan in the user table
     # - if user updates the points, then update the points in the user table
-# Delete account
 
+
+
+@app.delete("/user", response_class=JSONResponse, tags=["User"], summary="Delete user account")
+def delete_user(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to delete user account
+    """
+    user_obj = User()
+    user_db_data = user_obj.read(user["email"])
+
+    if user_db_data:
+        user_obj.handle_user_deletion(user["email"])
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "User deleted successfully"}
+        )
+    else:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"message": "User not found"}
+        )
 
 
 
