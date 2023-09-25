@@ -198,7 +198,7 @@ class ProcessJob:
         created_at = created_at.strftime("%Y-%m-%d %H:%M:%S")
 
         self.process_crud.create(
-            process_id=user_email + self.process_id,
+            process_id=user_email + "|" + self.process_id,
             user_email=user_email,
             status="processing",
             urls=self.urls,
@@ -249,7 +249,7 @@ class ProcessJob:
     def update(self,scrape_results):
         """Update the process"""
         # update the status in db as zipping
-        self.process_crud.update(self.user["email"] + self.process_id, {
+        self.process_crud.update(self.user["email"] + '|' + self.process_id, {
             "status": "zipping",
             "file_path": self.folder_path,
             "urls_scraped": scrape_results["urls_scraped"],

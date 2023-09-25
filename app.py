@@ -22,6 +22,7 @@ from src.utils.base.constants import NUMBER_OF_LOGS_TO_DISPLAY
 from src.main import render_sitemap, render_scrape
 from src.utils.user.auth import get_user_token
 from src.utils.user.handler import User
+from src.scraping.main import ProcessJob
 
 
 # Initialization
@@ -136,10 +137,15 @@ def scrape_websites(request: Request, background_tasks: BackgroundTasks, urls: l
         else:
             parallel = 3
         if user_db_data and user_db_data[0][3] == 1 and points > len(urls):
-            background_tasks.add_task(render_scrape, urls=urls, proxies=proxies, parse_text=parse_text, parallel=parallel, user=user)
+            # Setup required things for scraping and set status as processing
+            job_obj = ProcessJob(urls=urls, proxies=proxies, parse_text=parse_text, parallel=parallel, user=user)
+            job_result = job_obj.run()
+
+            background_tasks.add_task(render_scrape, urls=urls, proxies=proxies, parse_text=parse_text, parallel=parallel, job_data=job_result, job_obj=job_obj)
+
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
-                content={"message": "Job started"}
+                content={"message": "Scraping started", "job_id": job_result["process_id"]}
             )
         else:
             return JSONResponse(

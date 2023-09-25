@@ -21,21 +21,17 @@ def render_sitemap(url: str) -> dict:
 
 
 
-def render_scrape(urls: list, proxies: list, parse_text: bool=True, parallel: int=1, user: dict={}) -> dict:
+def render_scrape(urls: list, proxies: list, job_obj: ProcessJob, parse_text: bool=True, parallel: int=1, job_data: dict={}) -> dict:
     """Scrape data from the given URL with the given proxy"""
 
-    # Setup required things for scraping and set status as processing
-    job_obj = ProcessJob(urls=urls, proxies=proxies, parse_text=parse_text, parallel=parallel, user=user)
-    job_result = job_obj.run()
-
     # Start the scraping process
-    scraper_obj = WebScraper(num_workers=parallel, do_parse_html=parse_text, output_dir=job_result["folder_path"])
+    scraper_obj = WebScraper(num_workers=parallel, do_parse_html=parse_text, output_dir=job_data["folder_path"])
     scrape_results = scraper_obj.scrape_urls(urls=urls, proxies_list=proxies)
     
     # Update the job object with the scrape results and set status as zippping
     job_obj.update(scrape_results)
 
     # Zip the output folder and verify the hash
-    file_path, file_hash = zip_folder_and_verify(folder_path=job_result["folder_path"])
+    file_path, file_hash = zip_folder_and_verify(folder_path=job_data["folder_path"])
 
     # TODO: Given the file path and file hash, update the job with the file path and hash and set status as done and download link
