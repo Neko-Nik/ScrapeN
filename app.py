@@ -29,7 +29,7 @@ from src.scraping.main import ProcessJob
 app = FastAPI(
     title="Neko Nik - Scrape API",
     description="This Scrape API is used to scrape data from the web",
-    version="1.5.2",
+    version="1.5.7",
     docs_url="/docs",
     redoc_url="/redoc",
     include_in_schema=True,
@@ -131,17 +131,14 @@ def scrape_websites(request: Request, background_tasks: BackgroundTasks, urls: l
         user_obj = User()
         user_db_data = user_obj.read(user["email"])
         points = user_db_data[0][4]
-        parallel = user_db_data[0][5]
-        if parallel == "FREE":
-            parallel = 1
-        else:
-            parallel = 3
+        parallel_count = user_db_data[0][6]
+
         if user_db_data and user_db_data[0][3] == 1 and points > len(urls):
             # Setup required things for scraping and set status as processing
-            job_obj = ProcessJob(urls=urls, proxies=proxies, parse_text=parse_text, parallel=parallel, user=user)
+            job_obj = ProcessJob(urls=urls, proxies=proxies, parse_text=parse_text, parallel=parallel_count, user=user)
             job_result = job_obj.run()
 
-            background_tasks.add_task(render_scrape, urls=urls, proxies=proxies, parse_text=parse_text, parallel=parallel, job_data=job_result, job_obj=job_obj)
+            background_tasks.add_task(render_scrape, urls=urls, proxies=proxies, parse_text=parse_text, parallel=parallel_count, job_data=job_result, job_obj=job_obj)
 
             return JSONResponse(
                 status_code=status.HTTP_200_OK,

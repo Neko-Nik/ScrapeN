@@ -11,8 +11,8 @@ class User:
 
 
     @retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2 )
-    def create(self, email, name, uid, is_active, points, tier):
-        self.db.create(email, name, uid, is_active, points, tier)
+    def create(self, email, name, uid, is_active, points, tier, parallel_count):
+        self.db.create(email, name, uid, is_active, points, tier, parallel_count)
 
 
     @retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2 )
@@ -30,14 +30,14 @@ class User:
         self.db.delete(email)
 
 
-    def handle_user_creation_get(self, email, name=None, uid=None, is_active=False, points=100, tier="FREE"):
+    def handle_user_creation_get(self, email, name=None, uid=None, is_active=False, points=100, tier="FREE", parallel_count=1):
         try:
             user = self.read(email)
             stripe_data = None
             stripe_plan = None
 
             if not user:
-                self.create(email, name, uid, is_active, points, tier)
+                self.create(email, name, uid, is_active, points, tier, parallel_count)
                 user = self.read(email)
                 # TODO - Do retry logic here
                 # handle stripe customer creation

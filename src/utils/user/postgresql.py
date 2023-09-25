@@ -19,6 +19,7 @@ class UserDB(Base):
     is_active = Column(BOOLEAN, default=False)
     points = Column(Integer, default=0)   # 0 points means user is not created in Stripe
     tier = Column(String(100), default="FREE")  # FREE, PERSONAL, BUSINESS, ENTERPRISE
+    parallel_count = Column(Integer, default=1) # For FREE tier, parallel_count is 1
 
     processes = relationship("ProcessDB", back_populates="user")
 
@@ -31,10 +32,10 @@ class UserPostgreSQLCRUD:
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
-    def create(self, email, name, uid, is_active, points, tier):
+    def create(self, email, name, uid, is_active, points, tier, parallel_count):
         try:
             session = self.Session()
-            user = UserDB(email=email, name=name, uid=uid, is_active=is_active, points=points, tier=tier)
+            user = UserDB(email=email, name=name, uid=uid, is_active=is_active, points=points, tier=tier, parallel_count=parallel_count)
             session.add(user)
             session.commit()
             session.close()
@@ -48,10 +49,10 @@ class UserPostgreSQLCRUD:
             if email:
                 user = session.query(UserDB).filter_by(email=email).first()
                 if user:
-                    return [(user.email, user.name, user.uid, user.is_active, user.points, user.tier)]
+                    return [(user.email, user.name, user.uid, user.is_active, user.points, user.tier, user.parallel_count)]
             else:
                 users = session.query(UserDB).all()
-                return [(user.email, user.name, user.uid, user.is_active, user.points, user.tier) for user in users]
+                return [(user.email, user.name, user.uid, user.is_active, user.points, user.tier, user.parallel_count) for user in users]
         except SQLAlchemyError as e:
             print(f"Error: {e}")
             return []
