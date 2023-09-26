@@ -131,10 +131,13 @@ class UserPostgreSQLCRUD:
                 session.commit()
                 session.close()
                 print("UserDB record deleted successfully")
+                return True
             else:
                 print("UserDB not found")
+                return False
         except SQLAlchemyError as e:
             print(f"Error: {e}")
+            return False
 
 
 @retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2)

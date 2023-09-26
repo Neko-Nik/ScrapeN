@@ -28,8 +28,8 @@ class User:
 
     def handle_user_deletion(self, email):
         try:
-            self.db.delete(email)
-            return True
+            has_user_deleted = self.db.delete(email)
+            return has_user_deleted
         except Exception as err:
             # since many tables are dependent on user table, we need to delete them first
             print(f"Error: {err}")
