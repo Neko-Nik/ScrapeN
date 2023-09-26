@@ -11,6 +11,7 @@ from src.utils.base.libraries import (
     BackgroundTasks,
     Request,
     JSONResponse,
+    FileResponse,
     HTMLResponse,
     uvicorn,
     os,
@@ -23,14 +24,14 @@ from src.main import render_sitemap, render_scrape
 from src.utils.user.auth import get_user_token
 from src.utils.user.handler import User
 from src.scraping.main import ProcessJob
-from src.utils.user.postgresql import ProcessPostgreSQLCRUD
+from src.utils.user.postgresql import JobPostgreSQLCRUD
 
 
 # Initialization
 app = FastAPI(
     title="Neko Nik - Scrape API",
     description="This Scrape API is used to scrape data from the web",
-    version="1.6.1",
+    version="1.6.4",
     docs_url="/docs",
     redoc_url="/redoc",
     include_in_schema=True,
@@ -96,43 +97,25 @@ def view_logs(request: Request) -> HTMLResponse:
 
 
 
-@app.post("/user", response_class=JSONResponse, tags=["User"], summary="Create a new user")
-def create_user(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
-    """
-    This endpoint is used to create a new user
-    """
-    user_obj = User()
-    user, stripe_data, stripe_plan = user_obj.handle_user_creation_get(user["email"], user["name"], user["uid"], user["email_verified"])
-
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={"user": user, "stripe_data": stripe_data, "stripe_plan": stripe_plan}
-    )
-
-
-
-@app.get("/user", response_class=JSONResponse, tags=["User"], summary="Get user data")
+@app.get("/user", response_class=JSONResponse, tags=["User"], summary="Get user data, also creates user if not exists")
 def get_user_data(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
-    This endpoint is used to get user data
+    This endpoint is used to get user data, also creates user if not exists
     """
-    user_obj = User()
-    user_db_data = user_obj.read(user["email"])
+    try:
+        user_obj = User()
+        user_db_data = user_obj.get_user_data(user["email"], user["uid"], user["email_verified"])
 
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={"user": user_db_data}
-    )
+        return JSONResponse( status_code=status.HTTP_200_OK, content=user_db_data )
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
 
-# @app.put("/user", response_class=JSONResponse, tags=["User"], summary="Update user data")
+# @app.post("/user", response_class=JSONResponse, tags=["User"], summary="Update user data") or a webhook
 # update user data
     # - Do stripe webhooks also for updating the user data
-    # - if user changes the email, then update the email in the user table
-    # - if user changes the name, then update the name in the user table
-    # - if user changes the plan, then update the plan in the user table
-    # - if user updates the points, then update the points in the user table
 
 
 
@@ -141,100 +124,137 @@ def delete_user(request: Request, user: dict=Depends(get_user_token)) -> JSONRes
     """
     This endpoint is used to delete user account
     """
-    user_obj = User()
-    user_db_data = user_obj.read(user["email"])
-
-    if user_db_data:
-        user_obj.handle_user_deletion(user["email"])
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"message": "User deleted successfully"}
-        )
-    else:
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={"message": "User not found"}
-        )
-
-
-
-# Scrape data from the given URL with the given proxy
-@app.post("/scrape", response_class=JSONResponse, tags=["Scrape"], summary="Scrape data from the given URL with the given proxy")
-def scrape_websites(request: Request, background_tasks: BackgroundTasks, urls: list, proxies: list, 
-                    user: dict=Depends(get_user_token), parse_text: bool=True) -> JSONResponse:
-    """
-    This endpoint is used to scrape data from the given URL with the given proxy
-    """
     try:
-        # TODO: handle parallel requests based on user data
-        # if user is good to go then only do the scraping
         user_obj = User()
-        user_db_data = user_obj.read(user["email"])
-        points = user_db_data[0][4]
-        parallel_count = user_db_data[0][6]
-
-        if user_db_data and user_db_data[0][3] == 1 and points > len(urls):
-            # Setup required things for scraping and set status as processing
-            job_obj = ProcessJob(urls=urls, proxies=proxies, parse_text=parse_text, parallel=parallel_count, user=user)
-            job_result = job_obj.run()
-
-            background_tasks.add_task(render_scrape, urls=urls, proxies=proxies, parse_text=parse_text, parallel=parallel_count, job_data=job_result, job_obj=job_obj)
-
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={"message": "Scraping started", "job_id": job_result["process_id"]}
-            )
+        data = user_obj.handle_user_deletion(user["email"])
+        if data:
+            return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "User deleted successfully"})
         else:
-            return JSONResponse(
-                status_code=status.HTTP_412_PRECONDITION_FAILED,
-                content={"message": "User is not active or not enough points"}
-            )
+            return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Delete linked data first, then delete user"})
 
     except Exception as exc_info:
         logging.error(exc_info)
-        raise All_Exceptions(
-            "Something went wrong",
-            status.HTTP_500_INTERNAL_SERVER_ERROR)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
-
-# Scrape status of the given job id
-@app.get("/scrape", response_class=JSONResponse, tags=["Scrape"], summary="Scrape status of the given job id")
-def scrape_status(request: Request, job_id: str, user: dict=Depends(get_user_token)) -> JSONResponse:
+@app.get("/job/status/{job_id}", response_class=JSONResponse, tags=["Job"], summary="Job Status")
+def job_status(request: Request, job_id: str, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
     This endpoint is used to scrape status of the given job id
     """
     try:
         job_id = user["email"] + "|" + job_id
-        process_obj = ProcessPostgreSQLCRUD()
-        job_data = process_obj.read(job_id)
+        job_obj = JobPostgreSQLCRUD()
+        job_data = job_obj.read(job_id)
 
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"job_data": job_data}
-        )
-    except Exception as exc_info:
-        logging.error(exc_info)
-        raise All_Exceptions(
-            "Something went wrong",
-            status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-
-# Get List of URL, given sitemap URL (XML)
-@app.get("/sitemap", response_class=JSONResponse, tags=["Sitemap"], summary="Get List of URL, given sitemap URL (XML)")
-def get_sitemap_urls(request: Request, url: str, user: dict=Depends(get_user_token)) -> JSONResponse:
-    """
-    This endpoint is used to get List of URL, given sitemap URL (XML)
-    """
-    try:
-        urls_data = render_sitemap(url=url)
-        # also add logging to user table
-        logging.info(urls_data)
-        return JSONResponse( status_code=status.HTTP_200_OK, content=urls_data )
+        return JSONResponse( status_code=status.HTTP_200_OK, content=job_data )
     except Exception as exc_info:
         logging.error(exc_info)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
+@app.get("/job/list", response_class=JSONResponse, tags=["Job"], summary="Job Status")
+def get_all_jobs(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to get all the jobs of the user
+    """
+    try:
+        job_obj = JobPostgreSQLCRUD()
+        all_jobs = job_obj.filter_jobs(filters={"email": user["email"], "filter_by": "email"})
+
+        return JSONResponse( status_code=status.HTTP_200_OK, content=all_jobs )
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
+@app.get("/job/download/{job_id}", response_class=FileResponse, tags=["Job"], summary="Download processed job zip file")
+def download_job_file(request: Request, job_id: str, user: dict=Depends(get_user_token)) -> FileResponse:
+    """
+    This endpoint is used to download processed job zip file from the given job id
+    """
+    try:
+        job_obj = JobPostgreSQLCRUD()
+        job_data = job_obj.read(job_id=user["email"] + "|" + job_id)
+        zip_file_path = job_data.get("zip_file_path", None)
+        if zip_file_path:
+            zip_file_path = os.path.join(os.getcwd(), zip_file_path)
+            return FileResponse(zip_file_path, media_type='application/zip', filename=zip_file_path.split("/")[-1])
+        else:
+            return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Job not found"} )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
+@app.post("/job", response_class=JSONResponse, tags=["Job"], summary="Create a new job")
+def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, proxies: list, do_parsing: bool, parallel_count: int, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to create a new job
+    """
+    try:
+        
+        process_job_obj = ProcessJob(urls=urls, proxies=proxies, do_parsing=do_parsing, parallel=parallel_count, user=user)
+        job_data = process_job_obj.run()
+
+        if job_data:
+            background_tasks.add_task(render_scrape, urls=urls, proxies=proxies, do_parsing=do_parsing, parallel=parallel_count, job_data=job_data, job_obj=process_job_obj)
+            return JSONResponse( status_code=status.HTTP_200_OK, content={"job_id": job_data["job_id"]} )
+
+        else:
+            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": "Not enough points"} )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
+
+
+# save proxies to the database - edit, delete, add more proxies
+# accept json files for input - urls and proxies . also txt new line separated files example files
+# add logging to the user table (a new table) - get all logs as paginated response
+# buy more points, or pay as you go option
+# test proxies, list all proxies, delete proxies, add proxies, edit proxies
+# charts for the user - points, jobs, proxies, etc
+# firebase bkend, need to add Access Token Generator endpoint
+# add stripe payment gateway, add stripe webhooks, unique payment link generator for each user how ? frontend ?
+
+
+
+# DB tables
+## users
+    # email - user email (primary key) - string
+    # uid - user id - string
+    # points - user points - integer
+    # plan - user plan - string
+    # parallel_count - scraper parallel count - integer
+    # config - user config - TEXT   # a json string
+
+## jobs
+    # job_id - job id (primary key) - string
+    # user_email - user email (foreign key) - string
+    # status - job status - string
+    # urls - job urls - TEXT
+    # proxies - job proxies - TEXT
+    # created_at - job created at - datetime
+    # parse_text - job parse text - boolean
+    # parallel_count - job parallel count - integer
+    # urls_scraped - job urls scraped - TEXT
+    # urls_failed - job urls failed - TEXT
+    # proxies_used - job proxies used - TEXT
+    # proxies_failed - job proxies failed - TEXT
+    # points_used - job points used - integer
+    # zip_file_path - job zip file path - string
+    # file_hash - job file hash - string md5
+
+## logs
+    # log_id - log id (primary key) - string
+    # user_email - user email (foreign key) - string
+    # log - log - TEXT
+    # created_at - log created at - datetime
+
 
 
 

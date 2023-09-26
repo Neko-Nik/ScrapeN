@@ -38,7 +38,6 @@ class StripeManager:
             customer = self._get_stripe_customer(email)
             return customer
 
-
         customer = stripe.Customer.create(
             email=email,
             metadata=metadata

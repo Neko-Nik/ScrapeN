@@ -5,7 +5,7 @@ any new library should be added here and imported in the respective files
 
 # FastAPI libraries
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse , PlainTextResponse , HTMLResponse
+from fastapi.responses import JSONResponse , PlainTextResponse , HTMLResponse, FileResponse
 from fastapi import FastAPI, File, UploadFile , Form, Request, status, Response, Depends, BackgroundTasks
 from fastapi.templating import Jinja2Templates
 import uvicorn

@@ -3,7 +3,7 @@ from src.utils.base.libraries import logging, cloudscraper, requests, os, thread
 from src.utils.base.basic import Error
 from src.utils.base.constants import LIST_OF_SKIP_CODES, OUTPUT_ROOT_DIR
 from src.scraping.parsing import parse_html
-from src.utils.user.postgresql import ProcessPostgreSQLCRUD, UserPostgreSQLCRUD
+from src.utils.user.postgresql import UserPostgreSQLCRUD, JobPostgreSQLCRUD
 
 
 class WebScraper:
@@ -122,14 +122,14 @@ class WebScraper:
 
 
 class ProcessJob:
-    def __init__(self, urls: list, proxies: list, parse_text: bool = True, parallel: int = 1, user: dict = {}):
-        self.process_crud = ProcessPostgreSQLCRUD()
-        self.user_crud = UserPostgreSQLCRUD()
+    def __init__(self, urls: list, proxies: list, do_parsing: bool = True, parallel: int = 1, user: dict = {}):
+        self.jobDB = JobPostgreSQLCRUD()
+        self.userDB = UserPostgreSQLCRUD()
         self.urls = urls
         self.proxies = proxies
-        self.parse_text = parse_text
+        self.do_parsing = do_parsing
         self.parallel = parallel
-        self.process_id = None
+        self.job_id = None
         self.folder_path = None
         self.user = user
 
@@ -172,10 +172,8 @@ class ProcessJob:
         # Format the current time as a string
         formatted_time = current_time.strftime("%Y%m%d%H%M%S")
         # Convert the string to a unique string
-        job_id = self._string_connvert(formatted_time)
-
-        self.process_id = job_id
-        self.folder_path = os.path.join(OUTPUT_ROOT_DIR, self.user["email"],job_id)
+        self.job_id = self._string_connvert(formatted_time)
+        self.folder_path = os.path.join(OUTPUT_ROOT_DIR, self.user["email"], self.job_id)
 
     def _has_file_extension(self, url: str):
         """Check if the given URL has a file extension"""
@@ -190,95 +188,89 @@ class ProcessJob:
     def handle_file_based_urls(self):
         """Handle the file based URLs"""
         self.urls = [url for url in self.urls if not self._has_file_extension(url)]
-
-    def push_to_db(self):
-        """Push the data to the database"""
-        user_email = self.user["email"]
-        created_at = datetime.now()
-        created_at = created_at.strftime("%Y-%m-%d %H:%M:%S")
-
-        self.process_crud.create(
-            process_id=user_email + "|" + self.process_id,
-            user_email=user_email,
-            status="processing",
-            urls=self.urls,
-            proxies=self.proxies,
-            created_at=created_at,
-            parse_text=self.parse_text,
-            parallel_count=self.parallel
-        )
     
     def reduce_points(self):
         """Reduce the points from the user"""
-        # get the current points
-        # check if the points are greater than the given points
-        # if yes, reduce the points and return True
-        # else return False and set the process status as failed due to insufficient points
-        points = len(self.urls)
+        initial_points = len(self.urls)
         user_email = self.user["email"]
-        user = self.user_crud.read(user_email)
-        if user:
-            current_points = user[0][4]
-            if current_points >= points:
-                new_points = current_points - points
-                self.user_crud.update(user_email, {"points": new_points})
+        user_data = self.userDB.read(email=user_email)
+        current_points = user_data.get("points", 0)
+
+        if user_data:
+            if current_points >= initial_points:
+                self.userDB.update(user_email, {"points": current_points - initial_points})
                 return True
-            else:
-                self.process_crud.update(user_email + self.process_id, {"status": "failed due to insufficient points"})
-                return False
-        else:
-            self.process_crud.update(user_email + self.process_id, {"status": "failed due to insufficient points"})
-            return False
+        return False
+
+    def create_job_in_db(self):
+        """Create a job in the database"""
+        job_data = {
+            "job_id": self.user["email"] + '|' + self.job_id,
+            "email": self.user["email"],
+            "status": "processing",
+            "urls": json.dumps(self.urls),
+            "proxies": json.dumps(self.proxies),
+            "do_parsing": self.do_parsing,
+            "parallel_count": self.parallel,
+            "created_at": datetime.now()
+        }
+        self.jobDB.create(**job_data)
 
     def run(self):
         """Run the process"""
         self.make_job_id()
         self.handle_file_based_urls()
-        self.reduce_points()
-        self.push_to_db()
+        has_enough_points = self.reduce_points()
+        if not has_enough_points:
+            return False
+        self.create_job_in_db()
 
         return {
-            "process_id": self.process_id,
+            "job_id": self.job_id,
             "folder_path": self.folder_path,
             "urls": self.urls,
             "proxies": self.proxies,
-            "parse_text": self.parse_text,
-            "parallel": self.parallel
+            "do_parsing": self.do_parsing,
+            "parallel_count": self.parallel,
+            "has_enough_points": has_enough_points,
         }
-    
+
     def update(self,scrape_results):
         """Update the process"""
-        # update the status in db as zipping
-        self.process_crud.update(self.user["email"] + '|' + self.process_id, {
-            "status": "zipping",
-            "file_path": self.folder_path,
-            "urls_scraped": scrape_results["urls_scraped"],
-            "urls_failed": scrape_results["urls_failed"],
-            "proxies_used": scrape_results["proxies_used"],
-            "proxies_failed": scrape_results["proxies_failed"]
-        })
-        
         # increase the points by the number of urls not scraped
-        # sometimes urls failed has urls that are scraped so we need to remove them
         urls_scraped = scrape_results["urls_scraped"]
         urls_failed = scrape_results["urls_failed"]
         # remove success from the failed list
         urls_done = [url for url in urls_failed if url not in urls_scraped]
 
+        # update the status in db as zipping
+        self.jobDB.update(self.user["email"] + '|' + self.job_id, {
+            "status": "zipping",
+            "urls_scraped": json.dumps(scrape_results["urls_scraped"]),
+            "urls_failed": json.dumps(scrape_results["urls_failed"]),
+            "proxies_used": json.dumps(scrape_results["proxies_used"]),
+            "proxies_failed": json.dumps(scrape_results["proxies_failed"]),
+            "points_used": len(urls_scraped)
+        })
+
         # increase the points by the number of urls not scraped
         points = len(urls_done)
         user_email = self.user["email"]
-        user = self.user_crud.read(user_email)
+        user = self.userDB.read(user_email)
         if user:
-            current_points = user[0][4]
+            current_points = user.get("points", 0)
             new_points = current_points + points
-            self.user_crud.update(user_email, {"points": new_points})
+            self.userDB.update(user_email, {"points": new_points})
         else:
-            self.process_crud.update(user_email + self.process_id, {"status": "failed due to user not found"})
+            self.jobDB.update(user_email + '|' + self.job_id, {"status": "failed due to user not found"})
             return False
 
-    def failed(self):
+    def failed(self, message=""):
         """Update the process as failed"""
-        self.process_crud.update(self.user["email"] + '|' + self.process_id, {"status": "failed"})
+        self.jobDB.update(self.user["email"] + '|' + self.job_id, {"status": "Failed: " + message})
         return True
     
+    def update_job_completed(self, zip_file_path, zip_file_hash):
+        """Update the process as completed"""
+        self.jobDB.update(self.user["email"] + '|' + self.job_id, {"status": "completed", "zip_file_path": zip_file_path, "zip_file_hash": zip_file_hash})
+        return True

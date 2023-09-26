@@ -16,10 +16,6 @@ def get_user_token(res: Response, credential: HTTPAuthorizationCredentials=Depen
         )
     try:
         decoded_token = auth.verify_id_token(credential.credentials)
-        # if user name is not in database, add it same as the email without @
-        if not "name" in decoded_token:
-            # This also means that user is using password login
-            decoded_token["name"] = decoded_token["email"].split("@")[0]
 
     except Exception as err:
         raise HTTPException(
