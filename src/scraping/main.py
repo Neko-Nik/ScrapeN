@@ -182,7 +182,8 @@ class ProcessJob:
         # Split the path by "." and check if the last part has a file extension
         parts = path.split(".")
         if len(parts) > 1:
-            return True
+            if not parts[-1] in ["html", "htm"]:
+                return True
         return False
 
     def handle_file_based_urls(self):
@@ -198,6 +199,7 @@ class ProcessJob:
 
         if user_data:
             if current_points >= initial_points:
+                logging.debug(f"Reducing {initial_points} points from user {user_email} with current points {current_points}")
                 self.userDB.update(user_email, {"points": current_points - initial_points})
                 return True
         return False
@@ -222,7 +224,10 @@ class ProcessJob:
         self.handle_file_based_urls()
         has_enough_points = self.reduce_points()
         if not has_enough_points:
-            return False
+            return Error(code=400, message="Not enough points to scrape the given URLs")
+        if not self.urls:
+            return Error(code=400, message="No URLs left after removing the file based URLs")
+
         self.create_job_in_db()
 
         return {

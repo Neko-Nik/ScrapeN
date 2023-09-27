@@ -211,12 +211,12 @@ def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, 
         process_job_obj = ProcessJob(urls=urls, proxies=proxies, do_parsing=do_parsing, parallel=parallel_count, user=user)
         job_data = process_job_obj.run()
 
-        if job_data:
-            background_tasks.add_task(render_scrape, urls=urls, proxies=proxies, do_parsing=do_parsing, parallel=parallel_count, job_data=job_data, job_obj=process_job_obj)
-            return JSONResponse( status_code=status.HTTP_200_OK, content={"job_id": job_data["job_id"]} )
+        if isinstance(job_data, Error):
+            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": job_data.message} )
 
         else:
-            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": "Not enough points"} )
+            background_tasks.add_task(render_scrape, urls=urls, proxies=proxies, do_parsing=do_parsing, parallel=parallel_count, job_data=job_data, job_obj=process_job_obj)
+            return JSONResponse( status_code=status.HTTP_200_OK, content={"job_id": job_data["job_id"], "total_urls": len(urls), "total_proxies": len(proxies)} )
 
     except Exception as exc_info:
         logging.error(exc_info)
@@ -242,6 +242,22 @@ async def stripe_webhook(request: Request) -> JSONResponse:
     except Exception as exc_info:
         logging.error(exc_info)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
+
+@app.get("/sitemap", response_class=JSONResponse, tags=["Sitemap"], summary="Sitemap")
+def sitemap(request: Request, site_url: str) -> JSONResponse:
+    """
+    This endpoint is used to render_sitemap
+    """
+    try:
+        resp = render_sitemap(site_url)
+        return JSONResponse( status_code=status.HTTP_200_OK, content=resp )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
 
 
 # save proxies to the database - edit, delete, add more proxies
