@@ -1,7 +1,14 @@
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi import Depends, HTTPException, status, Response
-from firebase_admin import auth, credentials, initialize_app
-from src.utils.user.handler import User
+from src.utils.base.libraries import (
+    auth,
+    initialize_app,
+    credentials,
+    HTTPBearer,
+    HTTPAuthorizationCredentials,
+    HTTPException,
+    status,
+    Response,
+    Depends
+)
 
 credentials = credentials.Certificate("src/utils/user/firebase.json")
 

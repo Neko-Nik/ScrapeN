@@ -1,11 +1,21 @@
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.dialects.postgresql import TEXT, BOOLEAN
-from sqlalchemy.orm import sessionmaker, relationship
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.pool import QueuePool
-from src.utils.base.basic import retry
-import json
+from src.utils.base.libraries import (
+    create_engine,
+    Column,
+    Integer,
+    String,
+    ForeignKey,
+    declarative_base,
+    TEXT,
+    BOOLEAN,
+    sessionmaker,
+    relationship,
+    SQLAlchemyError,
+    QueuePool,
+    json,
+    logging
+)
+from src.utils.base.basic import retry, Error
+
 
 Base = declarative_base()
 
@@ -73,9 +83,10 @@ class UserPostgreSQLCRUD:
             session.add(user)
             session.commit()
             session.close()
-            print("UserDB record inserted successfully")
+            return True
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
+            logging.error(f"Error while creating user: {e}")
+            return Error(code=500, message="Error while creating user in UserDB")
 
     def read(self, email=None):
         try:
@@ -103,8 +114,8 @@ class UserPostgreSQLCRUD:
                 } for user in users]
 
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
-            return {}
+            logging.error(f"Error while reading user: {e}")
+            return Error(code=500, message="Error while reading user from UserDB")
 
     def update(self, email, new_data):
         try:
@@ -116,11 +127,10 @@ class UserPostgreSQLCRUD:
                     setattr(user, key, value)
                 session.commit()
                 session.close()
-                print("UserDB record updated successfully")
-            else:
-                print("UserDB not found")
+                return True
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
+            logging.error(f"Error while updating user: {e}")
+            return Error(code=500, message="Error while updating user in UserDB")
 
     def delete(self, email):
         try:
@@ -130,14 +140,13 @@ class UserPostgreSQLCRUD:
                 session.delete(user)
                 session.commit()
                 session.close()
-                print("UserDB record deleted successfully")
                 return True
             else:
-                print("UserDB not found")
-                return False
+                logging.error(f"User not found while deleting user in UserDB with email: {email}")
+                return Error(code=404, message="User not found while deleting user in UserDB")
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
-            return False
+            logging.error(f"Error while deleting user: {e}")
+            return Error(code=500, message="Error while deleting user from UserDB")
 
 
 @retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2)
@@ -164,9 +173,10 @@ class JobPostgreSQLCRUD:
             session.add(process)
             session.commit()
             session.close()
-            print("JobDB record inserted successfully")
+            return True
         except SQLAlchemyError as e:
             print(f"Error: {e}")
+            return Error(code=500, message="Error while creating job in JobDB")
 
     def read(self, job_id=None):
         try:
@@ -212,8 +222,8 @@ class JobPostgreSQLCRUD:
                 } for job in jobs]
 
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
-            return []
+            logging.error(f"Error while reading job: {e}")
+            return Error(code=500, message="Error while reading job from JobDB")
 
     def update(self, job_id, new_data):
         try:
@@ -225,11 +235,13 @@ class JobPostgreSQLCRUD:
                     setattr(job, key, value)
                 session.commit()
                 session.close()
-                print("JobDB record updated successfully")
+                return True
             else:
-                print("JobDB not found")
+                logging.error(f"Job not found while updating job in JobDB with job_id: {job_id}")
+                return Error(code=404, message="Job not found while updating job in JobDB")
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
+            logging.error(f"Error while updating job: {e}")
+            return Error(code=500, message="Error while updating job in JobDB")
 
     def delete(self, job_id):
         try:
@@ -239,19 +251,25 @@ class JobPostgreSQLCRUD:
                 session.delete(job)
                 session.commit()
                 session.close()
-                print("JobDB record deleted successfully")
+                return True
             else:
-                print("JobDB not found")
+                logging.error(f"Job not found while deleting job in JobDB with job_id: {job_id}")
+                return Error(code=404, message="Job not found while deleting job in JobDB")
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
+            logging.error(f"Error while deleting job: {e}")
+            return Error(code=500, message="Error while deleting job from JobDB")
 
 
     def _parse_list_string(self, input_string: str) -> list:
-        if input_string:
-            parsed_str = json.loads(input_string)
-        else:
-            parsed_str = []
-        return parsed_str
+        try:
+            if input_string:
+                parsed_str = json.loads(input_string)
+            else:
+                parsed_str = []
+            return parsed_str
+        except Exception as e:
+            logging.error(f"Error while parsing list string: {e}")
+            return Error(code=500, message="Error while parsing list string")
 
     def filter_jobs(self, filters):
         try:
@@ -291,10 +309,11 @@ class JobPostgreSQLCRUD:
                     "zip_file_hash": job.zip_file_hash,
                 } for job in jobs]
             else:
-                return []
+                logging.error(f"Invalid filter_by: {filters.get('filter_by')}")
+                return Error(code=400, message="Invalid filter_by")
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
-            return []
+            logging.error(f"Error while filtering jobs: {e}")
+            return Error(code=500, message="Error while filtering jobs from JobDB")
 
 
 @retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2)
@@ -312,9 +331,10 @@ class LogPostgreSQLCRUD:
             session.add(log)
             session.commit()
             session.close()
-            print("LogDB record inserted successfully")
+            return True
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
+            logging.error(f"Error while creating log: {e}")
+            return Error(code=500, message="Error while creating log in LogDB")
 
     def read(self, log_id=None):
         try:
@@ -338,8 +358,8 @@ class LogPostgreSQLCRUD:
                 } for log in logs]
 
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
-            return []
+            logging.error(f"Error while reading log: {e}")
+            return Error(code=500, message="Error while reading log from LogDB")
         
     def update(self, log_id, new_data):
         try:
@@ -351,11 +371,13 @@ class LogPostgreSQLCRUD:
                     setattr(log, key, value)
                 session.commit()
                 session.close()
-                print("LogDB record updated successfully")
+                return True
             else:
-                print("LogDB not found")
+                logging.error(f"LogDB not found while updating log in LogDB with log_id: {log_id}")
+                return Error(code=404, message="LogDB not found while updating log in LogDB")
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
+            logging.error(f"Error while updating log: {e}")
+            return Error(code=500, message="Error while updating log in LogDB")
 
     def delete(self, log_id):
         try:
@@ -365,11 +387,13 @@ class LogPostgreSQLCRUD:
                 session.delete(log)
                 session.commit()
                 session.close()
-                print("LogDB record deleted successfully")
+                return True
             else:
-                print("LogDB not found")
+                logging.error(f"LogDB not found while deleting log in LogDB with log_id: {log_id}")
+                return Error(code=404, message="LogDB not found while deleting log in LogDB")
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
+            logging.error(f"Error while deleting log: {e}")
+            return Error(code=500, message="Error while deleting log from LogDB")
 
     def filter_logs(self, filters):
         try:
@@ -393,8 +417,9 @@ class LogPostgreSQLCRUD:
                     "created_at": log.created_at,
                 } for log in logs]
             else:
-                return []
+                logging.error(f"Invalid filter_by: {filters.get('filter_by')}")
+                return Error(code=400, message="Invalid filter_by")
         except SQLAlchemyError as e:
-            print(f"Error: {e}")
-            return []
+            logging.error(f"Error while filtering logs: {e}")
+            return Error(code=500, message="Error while filtering logs from LogDB")
 

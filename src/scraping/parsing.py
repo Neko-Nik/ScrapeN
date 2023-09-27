@@ -1,6 +1,4 @@
-from bs4 import BeautifulSoup, NavigableString
-import re
-from urllib.parse import urljoin
+from src.utils.base.libraries import re, urljoin, NavigableString, BeautifulSoup
 
 
 

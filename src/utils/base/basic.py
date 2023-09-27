@@ -1,9 +1,6 @@
-from src.utils.base.libraries import (
-    BaseModel,
-    wraps,
-    time,
-    logging
-)
+from src.utils.base.libraries import BaseModel, wraps, time, logging
+
+
 
 class Error(BaseModel):
     code: int
@@ -11,10 +8,6 @@ class Error(BaseModel):
 
     def __str__(self) -> str:
         return f"Error: {self.code} - {self.message}"
-    
-
-
-
 
 
 def retry(exceptions, total_tries=4, initial_wait=0.5, backoff_factor=2, logger=None):
@@ -46,13 +39,13 @@ def retry(exceptions, total_tries=4, initial_wait=0.5, backoff_factor=2, logger=
                               "Failed despite best efforts after " + str(total_tries) + " tries.\n" + \
                               "args: " + print_args + ", kwargs: " + str(kwargs) + "\n" + \
                               "Exception: " + exception_message + "\n"
-                        print(msg, logger)
+                        logging.error(f"msg: {msg}, logger: {logger}")
                         raise
                     # Same for the retry message
                     msg = "Function: " + function_name + "\n" + \
                           "Exception: " + exception_message + "\n" + \
                           "Retrying in " + str(_delay) + " seconds!, args: " + print_args + ", kwargs: " + str(kwargs) + "\n"
-                    logging.info(f"msg: {msg}, logger: {logger}")
+                    logging.warning(f"msg: {msg}, logger: {logger}")
                     time.sleep(_delay)
                     _delay *= backoff_factor
 

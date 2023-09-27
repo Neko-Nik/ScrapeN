@@ -6,7 +6,8 @@ any new library should be added here and imported in the respective files
 # FastAPI libraries
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse , PlainTextResponse , HTMLResponse, FileResponse
-from fastapi import FastAPI, File, UploadFile , Form, Request, status, Response, Depends, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile , Form, Request, status, Response, Depends, BackgroundTasks, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.templating import Jinja2Templates
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -14,12 +15,33 @@ from slowapi.errors import RateLimitExceeded
 import uvicorn
 
 
+# Database libraries
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.dialects.postgresql import TEXT, BOOLEAN
+from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import QueuePool
+
+
+# Firebase
+from firebase_admin import auth, credentials, initialize_app
+
+
+# Parsing libraries
+from bs4 import BeautifulSoup, NavigableString
+from urllib.parse import urljoin
+import xml.etree.ElementTree as ET
 
 
 # other libraries
 import json
 import re
 import time
+import zipfile
+import shutil
+import hashlib
+import stripe
 import requests
 import threading
 import cloudscraper
@@ -27,7 +49,7 @@ import urllib.parse
 from datetime import datetime
 from pydantic import BaseModel
 from functools import wraps
-import xml.etree.ElementTree as ET
+
 
 # read env variables
 import dotenv

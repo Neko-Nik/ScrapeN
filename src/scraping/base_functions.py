@@ -1,12 +1,11 @@
-import os
-import zipfile
-import shutil
-import hashlib
+from src.utils.base.libraries import logging, os, zipfile, shutil, hashlib
+
+
 
 def zip_folder_and_verify(folder_path):
     # Check if the folder exists
     if not os.path.exists(folder_path):
-        # Means there is not even one url processed successfully
+        logging.error(f"Folder {folder_path} doesn't exist")
         return None, None
 
     # Create a zip file with the same name as the folder

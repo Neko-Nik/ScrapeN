@@ -1,7 +1,7 @@
 from src.utils.user.postgresql import UserPostgreSQLCRUD
 from src.utils.user.stripe_manager import StripeManager
-from src.utils.base.basic import Error, retry
-from src.utils.base.libraries import json
+from src.utils.base.basic import Error
+from src.utils.base.libraries import json, logging
 
 
 class User:
@@ -23,8 +23,8 @@ class User:
             return user
 
         except Exception as err:
-            print(f"Error: {err}")
-            return {"error": "Internal Server Error"}
+            logging.error(f"Error while getting user data: {err}")
+            return Error(code=500, message="Error while getting user data from DB or Creating user or Creating stripe customer")
 
     def handle_user_deletion(self, email):
         try:
@@ -32,19 +32,19 @@ class User:
             return has_user_deleted
         except Exception as err:
             # since many tables are dependent on user table, we need to delete them first
-            print(f"Error: {err}")
-            return False
+            logging.error(f"Error while deleting user: {err} \n\n This error is expected if the user has linked data across other tables")
+            return Error(code=500, message="Error while deleting user data from DB")
 
     def _get_points(self, email):
         try:
             user = self.db.read(email)
-            if not user:
-                return Error(code=404, message="User not found")
+            if isinstance(user, Error):
+                return user
             return user["points"]
 
         except Exception as err:
-            print(f"Error: {err}")
-            return Error(code=500, message="Internal Server Error")
+            logging.error(f"Error while getting user points: {err}")
+            return Error(code=500, message="Error while getting user points")
 
 
     def deduct_points(self, email, points):
@@ -63,6 +63,6 @@ class User:
             return True
 
         except Exception as err:
-            print(f"Error: {err}")
-            return False
+            logging.error(f"Error while deducting user points: {err}")
+            return Error(code=500, message="Error while deducting user points")
 

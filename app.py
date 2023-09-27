@@ -28,6 +28,7 @@ from src.main import render_sitemap, render_scrape
 from src.utils.user.auth import get_user_token
 from src.utils.user.handler import User
 from src.scraping.main import ProcessJob
+from src.utils.base.basic import Error
 from src.utils.user.postgresql import JobPostgreSQLCRUD
 from src.utils.user.stripe_manager import StripeManager
 
@@ -113,6 +114,8 @@ def get_user_data(request: Request, user: dict=Depends(get_user_token)) -> JSONR
     try:
         user_obj = User()
         user_db_data = user_obj.get_user_data(user["email"], user["uid"], user["email_verified"])
+        if isinstance(user_db_data, Error):
+            raise All_Exceptions( user_db_data.message, user_db_data.code )
 
         return JSONResponse( status_code=status.HTTP_200_OK, content=user_db_data )
     except Exception as exc_info:
@@ -135,10 +138,10 @@ def delete_user(request: Request, user: dict=Depends(get_user_token)) -> JSONRes
     try:
         user_obj = User()
         data = user_obj.handle_user_deletion(user["email"])
-        if data:
-            return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "User deleted successfully"})
-        else:
-            return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Delete linked data first, then delete user"})
+        if isinstance(data, Error) or not data:
+            return JSONResponse( status_code=status.HTTP_423_LOCKED, content={"message": "User not deleted, please delete linked data first"} )
+
+        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "User deleted successfully"})
 
     except Exception as exc_info:
         logging.error(exc_info)
@@ -154,6 +157,8 @@ def job_status(request: Request, job_id: str, user: dict=Depends(get_user_token)
         job_id = user["email"] + "|" + job_id
         job_obj = JobPostgreSQLCRUD()
         job_data = job_obj.read(job_id)
+        if not job_data:
+            return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Job not found, please check the job id"} )
 
         return JSONResponse( status_code=status.HTTP_200_OK, content=job_data )
     except Exception as exc_info:
