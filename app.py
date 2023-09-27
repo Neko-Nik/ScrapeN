@@ -35,6 +35,7 @@ from src.scraping.main import ProcessJob
 from src.utils.base.basic import Error
 from src.utils.user.postgresql import JobPostgreSQLCRUD
 from src.utils.user.stripe_manager import StripeManager
+from src.proxies.main import ProxyValidator, Proxies
 
 
 # Initialization
@@ -241,7 +242,18 @@ def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, 
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
+@app.get("/proxies", response_class=JSONResponse, tags=["Proxies"], summary="Get user proxies list")
+def get_proxies(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to get user proxies list
+    """
+    try:
+        proxies_obj = Proxies(user)
+        return JSONResponse( status_code=status.HTTP_200_OK, content=proxies_obj.proxies )
 
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
 @app.put("/proxies", response_class=JSONResponse, tags=["Proxies"], summary="Update user proxies list")
@@ -251,63 +263,30 @@ def update_proxies(request: Request, user: dict=Depends(get_user_token),
     This endpoint is used to update user proxies list, via list or json file
     """
     try:
-        # if file is uploaded
+        proxies_obj = Proxies(user)
         if file:
-            file_content = file.file.read()
-            file_content = file_content.decode("utf-8")
-            proxies = json.loads(file_content)
-            if not proxies:
-                return JSONResponse( status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Invalid file content"} )
-            
-        # if proxies are passed as list
-        elif proxies:
+            # read file
+            content = file.file.read()
+            proxies = json.loads(content)
             if not isinstance(proxies, list):
-                return JSONResponse( status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Invalid proxies list"} )
+                return JSONResponse( status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Invalid file format, please upload a json file"} )
+
+        elif proxies:
             proxies = proxies[0].split(",")
-        
-        else:
-            return JSONResponse( status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Invalid input"} )
-        
-        # validate proxies before saving
 
-        file_path = os.path.join(os.getcwd(), OUTPUT_ROOT_DIR, user["email"], "proxies.json")
+        validator_obj = ProxyValidator(proxies=proxies)
+        is_success = proxies_obj.update(validator_obj.valid_proxies)
+        if isinstance(is_success, Error):
+            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": is_success.message} )
 
-        if os.path.exists(file_path):
-            with open(file_path, "r") as file:
-                old_proxies = json.load(file)
-                # add new proxies to the old proxies
-                old_proxies.extend(proxies)
-                proxies = old_proxies
+        resp = { "valid_proxies": validator_obj.valid_proxies, "invalid_proxies": validator_obj.invalid_proxies }
 
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, "w") as file:
-            json.dump(proxies, file, indent=4)
-
-        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Proxies updated successfully"} )
+        return JSONResponse( status_code=status.HTTP_200_OK, content=resp )
 
     except Exception as exc_info:
         logging.error(exc_info)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
-
-@app.get("/proxies", response_class=JSONResponse, tags=["Proxies"], summary="Get user proxies list")
-def get_proxies(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
-    """
-    This endpoint is used to get user proxies list
-    """
-    try:
-        file_path = os.path.join(os.getcwd(), OUTPUT_ROOT_DIR, user["email"], "proxies.json")
-        if os.path.exists(file_path):
-            with open(file_path, "r") as file:
-                proxies = json.load(file)
-                return JSONResponse( status_code=status.HTTP_200_OK, content={"proxies": proxies} )
-        else:
-            return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Proxies not found"} )
-
-    except Exception as exc_info:
-        logging.error(exc_info)
-        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
-    
 
 @app.delete("/proxies", response_class=JSONResponse, tags=["Proxies"], summary="Delete user proxies list")
 def delete_proxies(request: Request, user: dict=Depends(get_user_token), proxies: Optional[list] = Form(None)) -> JSONResponse:
@@ -315,26 +294,16 @@ def delete_proxies(request: Request, user: dict=Depends(get_user_token), proxies
     This endpoint is used to delete user proxies list
     """
     try:
-        file_path = os.path.join(os.getcwd(), OUTPUT_ROOT_DIR, user["email"], "proxies.json")
-        if os.path.exists(file_path):
-            with open(file_path, "r") as file:
-                old_proxies = json.load(file)
-                # remove proxies from the old proxies
-                if proxies:
-                    for proxy in proxies:
-                        if proxy in old_proxies:
-                            old_proxies.remove(proxy)
-                
-                else:
-                    old_proxies = []
-
-            with open(file_path, "w") as file:
-                json.dump(old_proxies, file, indent=4)
-            
-            return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Proxies deleted successfully"} )
-        
+        proxies_obj = Proxies(user)
+        if proxies:
+            proxies = proxies[0].split(",")
+            proxies_obj.delete(delete_list=proxies)
+            message = "Proxies that are given are deleted successfully, if they exist"
         else:
-            return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Proxies not found"} )
+            proxies_obj.delete()
+            message = "All proxies deleted successfully"
+
+        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": message} )
 
     except Exception as exc_info:
         logging.error(exc_info)
