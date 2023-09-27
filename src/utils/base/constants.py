@@ -9,8 +9,8 @@ from src.utils.base.libraries import os, configparser, dotenv
 dotenv.load_dotenv()
 
 # environment variables
-API_TOKEN = os.getenv("API_TOKEN")
-API_KEY_ID = os.getenv("API_KEY_ID")
+STRIPE_API_KEY = os.getenv("STRIPE_API_KEY")
+STRIPE_WEBHOOK_SIGNING_SECRET = os.getenv("STRIPE_WEBHOOK_SIGNING_SECRET")
 
 
 # config.cfg file setup

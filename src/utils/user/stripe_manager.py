@@ -1,5 +1,6 @@
 from src.utils.base.basic import retry, Error
 from src.utils.base.libraries import stripe, json, logging
+from src.utils.base.constants import STRIPE_API_KEY, STRIPE_WEBHOOK_SIGNING_SECRET
 
 
 def save_to_json_file(file_path, data):
@@ -9,7 +10,7 @@ def save_to_json_file(file_path, data):
 
 class StripePlanManager:
     def __init__(self, event_data):
-        stripe.api_key = "sk_test_51NbdcnSG8jX2WdcmZA7QQaWe4GoKY9wVNEWZV2E3SkHL5Ymbds1d4DWBUVZeWbwAc5gxoQOsqgXojs7lpLI0QLG300CRSSIzRo"
+        stripe.api_key = STRIPE_API_KEY
         self.event_data = event_data
 
     # If any issue do only one thing: raise error don't return false or something else
@@ -29,8 +30,8 @@ class StripePlanManager:
 
 class StripeManager:
     def __init__(self):
-        stripe.api_key = "sk_test_51NbdcnSG8jX2WdcmZA7QQaWe4GoKY9wVNEWZV2E3SkHL5Ymbds1d4DWBUVZeWbwAc5gxoQOsqgXojs7lpLI0QLG300CRSSIzRo"
-        self.webhook_signing_secret = "whsec_82gOhSl2mKaqMKMeKUGz00aHgyA2YmPC"
+        stripe.api_key = STRIPE_API_KEY
+        self.webhook_signing_secret = STRIPE_WEBHOOK_SIGNING_SECRET
 
     @retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2 )
     def _check_customer_exists(self, email):
