@@ -78,7 +78,7 @@ async def input_data_exception_handler(request: Request, exc: All_Exceptions):
 
 #    Endpoints    #
 
-# Logs of API
+
 @app.get("/logs", response_class=HTMLResponse, tags=["Logs"], summary="Logs of API")
 def view_logs(request: Request) -> HTMLResponse:
     """
@@ -105,7 +105,6 @@ def view_logs(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("logs.html", response)
 
 
-
 @app.get("/user", response_class=JSONResponse, tags=["User"], summary="Get user data, also creates user if not exists")
 def get_user_data(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
@@ -123,11 +122,25 @@ def get_user_data(request: Request, user: dict=Depends(get_user_token)) -> JSONR
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
+@app.post("/webhook/stripe", response_class=JSONResponse, tags=["Webhook"], summary="Stripe Webhook")
+async def stripe_webhook(request: Request) -> JSONResponse:
+    """
+    This endpoint is used to handle stripe webhook
+    """
+    try:
+        payload = await request.body()
+        headers = request.headers
+        stripe_signature = headers.get('stripe-signature','')
+        if not stripe_signature:
+            raise All_Exceptions( "Invalid stripe signature", status.HTTP_400_BAD_REQUEST )
 
-# @app.post("/user", response_class=JSONResponse, tags=["User"], summary="Update user data") or a webhook
-# update user data
-    # - Do stripe webhooks also for updating the user data
+        stripe_obj = StripeManager()
+        stripe_obj.webhook_handler(payload, stripe_signature)
+        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Webhook handled successfully"} )
 
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
 @app.delete("/user", response_class=JSONResponse, tags=["User"], summary="Delete user account")
@@ -223,25 +236,6 @@ def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, 
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
-@app.post("/webhook/stripe", response_class=JSONResponse, tags=["Webhook"], summary="Stripe Webhook")
-async def stripe_webhook(request: Request) -> JSONResponse:
-    """
-    This endpoint is used to handle stripe webhook
-    """
-    try:
-        payload = await request.body()
-        headers = request.headers
-        stripe_signature = headers.get('stripe-signature','')
-        if not stripe_signature:
-            raise All_Exceptions( "Invalid stripe signature", status.HTTP_400_BAD_REQUEST )
-
-        stripe_obj = StripeManager()
-        stripe_obj.webhook_handler(payload, stripe_signature)
-        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Webhook handled successfully"} )
-
-    except Exception as exc_info:
-        logging.error(exc_info)
-        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
 
@@ -260,14 +254,12 @@ def sitemap(request: Request, site_url: str) -> JSONResponse:
 
 
 
-# save proxies to the database - edit, delete, add more proxies
+# save proxies to the file - edit, delete, add more proxies
 # accept json files for input - urls and proxies . also txt new line separated files example files
-# add logging to the user table (a new table) - get all logs as paginated response
 # buy more points, or pay as you go option
-# test proxies, list all proxies, delete proxies, add proxies, edit proxies
 # charts for the user - points, jobs, proxies, etc
 # firebase bkend, need to add Access Token Generator endpoint
-# add stripe payment gateway, add stripe webhooks, unique payment link generator for each user how ? frontend ?
+# add stripe payment gateway, unique payment link generator for each user how ? frontend ?
 
 
 
