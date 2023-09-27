@@ -132,6 +132,8 @@ class ProcessJob:
         self.job_id = None
         self.folder_path = None
         self.user = user
+        self.allocated_parallel = 0
+        self.user_db_data = {}
 
     def _string_connvert(self, date: str):
         date = str(date)
@@ -189,18 +191,16 @@ class ProcessJob:
     def handle_file_based_urls(self):
         """Handle the file based URLs"""
         self.urls = [url for url in self.urls if not self._has_file_extension(url)]
-    
+
     def reduce_points(self):
         """Reduce the points from the user"""
         initial_points = len(self.urls)
-        user_email = self.user["email"]
-        user_data = self.userDB.read(email=user_email)
-        current_points = user_data.get("points", 0)
+        current_points = self.user_db_data.get("points", 0)
 
-        if user_data:
+        if self.user_db_data:
             if current_points >= initial_points:
-                logging.debug(f"Reducing {initial_points} points from user {user_email} with current points {current_points}")
-                self.userDB.update(user_email, {"points": current_points - initial_points})
+                logging.debug(f"Reducing {initial_points} points from user {self.user['email']} with current points {current_points}")
+                self.userDB.update(self.user["email"], {"points": current_points - initial_points})
                 return True
         return False
 
@@ -218,15 +218,34 @@ class ProcessJob:
         }
         self.jobDB.create(**job_data)
 
+    def pre_conditions(self):
+        user_email = self.user["email"]
+        user_data = self.userDB.read(email=user_email)
+        self.user_db_data = user_data
+        self.allocated_parallel = self.user_db_data.get("parallel_count", 0)
+
+        if not user_data:
+            return Error(code=404, message=f"User with email {user_email} not found")
+
+        if not self.urls:
+            return Error(code=412, message="No URLs left after removing the file based URLs")
+
+        if self.parallel > self.allocated_parallel:
+            return Error(code=412, message=f"Parallel count {self.parallel} is greater than allocated parallel count {self.allocated_parallel}")
+
+        has_enough_points = self.reduce_points()
+        if not has_enough_points:
+            return Error(code=412, message="Not enough points to scrape the given URLs")
+
+        return {"has_enough_points": has_enough_points}
+
     def run(self):
         """Run the process"""
         self.make_job_id()
         self.handle_file_based_urls()
-        has_enough_points = self.reduce_points()
-        if not has_enough_points:
-            return Error(code=400, message="Not enough points to scrape the given URLs")
-        if not self.urls:
-            return Error(code=400, message="No URLs left after removing the file based URLs")
+        pre_process = self.pre_conditions()
+        if isinstance(pre_process, Error):
+            return pre_process
 
         self.create_job_in_db()
 
@@ -237,7 +256,7 @@ class ProcessJob:
             "proxies": self.proxies,
             "do_parsing": self.do_parsing,
             "parallel_count": self.parallel,
-            "has_enough_points": has_enough_points,
+            "has_enough_points": pre_process["has_enough_points"],
         }
 
     def update(self,scrape_results):
@@ -255,7 +274,9 @@ class ProcessJob:
             "urls_failed": json.dumps(scrape_results["urls_failed"]),
             "proxies_used": json.dumps(scrape_results["proxies_used"]),
             "proxies_failed": json.dumps(scrape_results["proxies_failed"]),
-            "points_used": len(urls_scraped)
+            "points_used": len(urls_scraped),
+            # "parallel_count": 
+            # TODO: add the parallel count used back to the user
         })
 
         # increase the points by the number of urls not scraped

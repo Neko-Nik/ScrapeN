@@ -36,6 +36,7 @@ from src.utils.base.basic import Error
 from src.utils.user.postgresql import JobPostgreSQLCRUD
 from src.utils.user.stripe_manager import StripeManager
 from src.proxies.main import ProxyValidator, Proxies
+from src.profiles.main import JobProfile
 
 
 # Initialization
@@ -218,7 +219,7 @@ def download_job_file(request: Request, job_id: str, user: dict=Depends(get_user
         logging.error(exc_info)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
-
+# TODO: update the parallel count of the job (parallel units)
 @app.post("/job", response_class=JSONResponse, tags=["Job"], summary="Create a new job")
 @limiter.limit("1/2 second")
 def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, proxies: list, do_parsing: bool,
@@ -310,6 +311,99 @@ def delete_proxies(request: Request, user: dict=Depends(get_user_token), proxies
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
+@app.get("/job/profile", response_class=JSONResponse, tags=["Profile"], summary="Get Job Profile")
+def get_job_profile(request: Request, user: dict=Depends(get_user_token), profile_name: str=None) -> JSONResponse:
+    """
+    This endpoint is used to get all the job profiles and also a specific job profile if profile name is given
+    """
+    try:
+        profile_obj = JobProfile(user)
+        profile_data = profile_obj.all_profiles
+
+        if isinstance(profile_data, Error):
+            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": profile_data.message} )
+        
+        if profile_name:
+            profile_data = profile_data.get(profile_name, None)
+            if not profile_data:
+                return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Profile not found"} )
+
+        return JSONResponse( status_code=status.HTTP_200_OK, content=profile_data )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
+@app.post("/job/profile", response_class=JSONResponse, tags=["Profile"], summary="Create Job Profile")
+def create_job_profile(request: Request, profile_name: str, parallel_count: int=None, parse_text: bool=True,
+                        proxies: list=None, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to create job profile
+    """
+    try:
+        profile_data = {
+            "parallel_count": parallel_count,
+            "parse_text": parse_text,
+            "proxies": proxies
+        }
+        profile_obj = JobProfile(user)
+        is_success = profile_obj.create(profile_name, profile_data)
+        if isinstance(is_success, Error):
+            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": is_success.message} )
+
+        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Profile created successfully"} )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
+@app.put("/job/profile", response_class=JSONResponse, tags=["Profile"], summary="Update Job Profile")
+def update_job_profile(request: Request, profile_name: str, parallel_count: int=None, parse_text: bool=None,
+                        proxies: list=None, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to update job profile
+    """
+    try:
+        profile_data = {}
+        if parallel_count:
+            profile_data["parallel_count"] = parallel_count
+        if parse_text is not None:
+            profile_data["parse_text"] = parse_text
+        if proxies:
+            profile_data["proxies"] = proxies
+
+        profile_obj = JobProfile(user)
+        is_success = profile_obj.update(profile_name, profile_data)
+        if isinstance(is_success, Error):
+            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": is_success.message} )
+
+        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Profile updated successfully"} )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
+@app.delete("/job/profile", response_class=JSONResponse, tags=["Profile"], summary="Delete Job Profile")
+def delete_job_profile(request: Request, profile_name: str, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to delete job profile
+    """
+    try:
+        profile_obj = JobProfile(user)
+        is_success = profile_obj.delete(profile_name)
+        if isinstance(is_success, Error):
+            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": is_success.message} )
+
+        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Profile deleted successfully"} )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
 
 
 
@@ -327,7 +421,7 @@ def sitemap(request: Request, site_url: str) -> JSONResponse:
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
-
+# 25-30% usage for workers of 30 parallel count
 # notification system, after job is completed, send email to the user or a webhook
 # buy more points, or pay as you go option
 # charts for the user - points, jobs, proxies, etc
