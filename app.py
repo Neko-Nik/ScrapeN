@@ -36,10 +36,10 @@ from src.utils.user.stripe_manager import StripeManager
 # Initialization
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
-    title="Neko Nik - Scrape API",
-    description="This Scrape API is used to scrape data from the web",
-    version="1.6.4",
-    docs_url="/docs",
+    title="Neko Nik - ScrapeN API",
+    description="This ScrapeN API is used to scrape data from the web",
+    version="1.6.5",
+    docs_url="/",
     redoc_url="/redoc",
     include_in_schema=True,
 )
@@ -311,3 +311,16 @@ if __name__ == '__main__':
     uvicorn.run('app:app', host='0.0.0.0', port=8083, reload=True)
 
 # 184.174.126.249:6541:olmjtxsz:yccmlx17olxs
+#
+# {
+#   "urls": [
+#     "https://quickbooks.intuit.com/accountants/resources/marketing-hub/video/create-social-media-content/",
+#     "https://quickbooks.intuit.com/time-tracking/resources/affordable-care-act-benefits/",
+#     "https://quickbooks.intuit.com/desktop/enterprise/payroll-and-payments/"
+#   ],
+#   "proxies": [
+#   "216.19.217.132:6372:olmjtxsz:yccmlx17olxs",
+#   "134.73.64.103:6388:olmjtxsz:yccmlx17olxs",
+#   "107.181.143.40:6171:olmjtxsz:yccmlx17olxs"
+#   ]
+# }
