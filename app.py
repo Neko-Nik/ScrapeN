@@ -13,7 +13,11 @@ from src.utils.base.libraries import (
     JSONResponse,
     FileResponse,
     HTMLResponse,
+    UploadFile,
+    File,
     uvicorn,
+    Optional,
+    Form,
     os,
     logging,
     json,
@@ -23,7 +27,7 @@ from src.utils.base.libraries import (
     _rate_limit_exceeded_handler,
     RateLimitExceeded
 )
-from src.utils.base.constants import NUMBER_OF_LOGS_TO_DISPLAY
+from src.utils.base.constants import NUMBER_OF_LOGS_TO_DISPLAY, OUTPUT_ROOT_DIR
 from src.main import render_sitemap, render_scrape
 from src.utils.user.auth import get_user_token
 from src.utils.user.handler import User
@@ -38,7 +42,7 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
     title="Neko Nik - ScrapeN API",
     description="This ScrapeN API is used to scrape data from the web",
-    version="1.6.5",
+    version="1.6.6",
     docs_url="/",
     redoc_url="/redoc",
     include_in_schema=True,
@@ -216,7 +220,8 @@ def download_job_file(request: Request, job_id: str, user: dict=Depends(get_user
 
 @app.post("/job", response_class=JSONResponse, tags=["Job"], summary="Create a new job")
 @limiter.limit("1/2 second")
-def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, proxies: list, do_parsing: bool, parallel_count: int, user: dict=Depends(get_user_token)) -> JSONResponse:
+def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, proxies: list, do_parsing: bool,
+               parallel_count: int, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
     This endpoint is used to create a new job, n number of urls and proxies can be passed, even 1 url and 1 proxy can be passed
     """
@@ -230,6 +235,106 @@ def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, 
         else:
             background_tasks.add_task(render_scrape, urls=urls, proxies=proxies, do_parsing=do_parsing, parallel=parallel_count, job_data=job_data, job_obj=process_job_obj)
             return JSONResponse( status_code=status.HTTP_200_OK, content={"job_id": job_data["job_id"], "total_urls": len(urls), "total_proxies": len(proxies)} )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
+
+
+
+@app.put("/proxies", response_class=JSONResponse, tags=["Proxies"], summary="Update user proxies list")
+def update_proxies(request: Request, user: dict=Depends(get_user_token),
+                   file: Optional[UploadFile] = File(None), proxies: Optional[list] = Form(None)) -> JSONResponse:
+    """
+    This endpoint is used to update user proxies list, via list or json file
+    """
+    try:
+        # if file is uploaded
+        if file:
+            file_content = file.file.read()
+            file_content = file_content.decode("utf-8")
+            proxies = json.loads(file_content)
+            if not proxies:
+                return JSONResponse( status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Invalid file content"} )
+            
+        # if proxies are passed as list
+        elif proxies:
+            if not isinstance(proxies, list):
+                return JSONResponse( status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Invalid proxies list"} )
+            proxies = proxies[0].split(",")
+        
+        else:
+            return JSONResponse( status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Invalid input"} )
+        
+        # validate proxies before saving
+
+        file_path = os.path.join(os.getcwd(), OUTPUT_ROOT_DIR, user["email"], "proxies.json")
+
+        if os.path.exists(file_path):
+            with open(file_path, "r") as file:
+                old_proxies = json.load(file)
+                # add new proxies to the old proxies
+                old_proxies.extend(proxies)
+                proxies = old_proxies
+
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w") as file:
+            json.dump(proxies, file, indent=4)
+
+        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Proxies updated successfully"} )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
+@app.get("/proxies", response_class=JSONResponse, tags=["Proxies"], summary="Get user proxies list")
+def get_proxies(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to get user proxies list
+    """
+    try:
+        file_path = os.path.join(os.getcwd(), OUTPUT_ROOT_DIR, user["email"], "proxies.json")
+        if os.path.exists(file_path):
+            with open(file_path, "r") as file:
+                proxies = json.load(file)
+                return JSONResponse( status_code=status.HTTP_200_OK, content={"proxies": proxies} )
+        else:
+            return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Proxies not found"} )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+    
+
+@app.delete("/proxies", response_class=JSONResponse, tags=["Proxies"], summary="Delete user proxies list")
+def delete_proxies(request: Request, user: dict=Depends(get_user_token), proxies: Optional[list] = Form(None)) -> JSONResponse:
+    """
+    This endpoint is used to delete user proxies list
+    """
+    try:
+        file_path = os.path.join(os.getcwd(), OUTPUT_ROOT_DIR, user["email"], "proxies.json")
+        if os.path.exists(file_path):
+            with open(file_path, "r") as file:
+                old_proxies = json.load(file)
+                # remove proxies from the old proxies
+                if proxies:
+                    for proxy in proxies:
+                        if proxy in old_proxies:
+                            old_proxies.remove(proxy)
+                
+                else:
+                    old_proxies = []
+
+            with open(file_path, "w") as file:
+                json.dump(old_proxies, file, indent=4)
+            
+            return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Proxies deleted successfully"} )
+        
+        else:
+            return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Proxies not found"} )
 
     except Exception as exc_info:
         logging.error(exc_info)
@@ -254,8 +359,7 @@ def sitemap(request: Request, site_url: str) -> JSONResponse:
 
 
 
-# save proxies to the file - edit, delete, add more proxies
-# accept json files for input - urls and proxies . also txt new line separated files example files
+# notification system, after job is completed, send email to the user or a webhook
 # buy more points, or pay as you go option
 # charts for the user - points, jobs, proxies, etc
 # firebase bkend, need to add Access Token Generator endpoint

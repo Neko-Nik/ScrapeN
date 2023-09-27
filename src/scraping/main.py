@@ -279,3 +279,4 @@ class ProcessJob:
         """Update the process as completed"""
         self.jobDB.update(self.user["email"] + '|' + self.job_id, {"status": "completed", "zip_file_path": zip_file_path, "zip_file_hash": zip_file_hash})
         return True
+

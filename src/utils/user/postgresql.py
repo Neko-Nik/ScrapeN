@@ -148,6 +148,26 @@ class UserPostgreSQLCRUD:
             logging.error(f"Error while deleting user: {e}")
             return Error(code=500, message="Error while deleting user from UserDB")
 
+    def update_config(self, email, new_config: dict):
+        """Update config in UserDB, without overwriting the existing config"""
+        try:
+            session = self.Session()
+            user = session.query(UserDB).filter_by(email=email).first()
+            if user:
+                old_config = json.loads(user.config)
+                for key, value in new_config.items():
+                    old_config[key] = value
+                user.config = json.dumps(old_config)
+                session.commit()
+                session.close()
+                return True
+            else:
+                logging.error(f"User not found while updating config in UserDB with email: {email}")
+                return Error(code=404, message="User not found while updating config in UserDB")
+        except SQLAlchemyError as e:
+            logging.error(f"Error while updating config: {e}")
+            return Error(code=500, message="Error while updating config in UserDB")
+
 
 @retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2)
 class JobPostgreSQLCRUD:
