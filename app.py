@@ -17,7 +17,11 @@ from src.utils.base.libraries import (
     os,
     logging,
     json,
-    status
+    status,
+    Limiter,
+    get_remote_address,
+    _rate_limit_exceeded_handler,
+    RateLimitExceeded
 )
 from src.utils.base.constants import NUMBER_OF_LOGS_TO_DISPLAY
 from src.main import render_sitemap, render_scrape
@@ -29,6 +33,7 @@ from src.utils.user.stripe_manager import StripeManager
 
 
 # Initialization
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
     title="Neko Nik - Scrape API",
     description="This Scrape API is used to scrape data from the web",
@@ -41,6 +46,10 @@ app = FastAPI(
 # Load templates
 templates = Jinja2Templates(directory="templates")
 
+# Add slowapi rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Add CROCS middle ware to allow cross origin requests
 app.add_middleware(
     CORSMiddleware,
@@ -49,7 +58,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # Class for handling wrong input 
 class All_Exceptions(Exception):
@@ -189,12 +197,11 @@ def download_job_file(request: Request, job_id: str, user: dict=Depends(get_user
 
 
 @app.post("/job", response_class=JSONResponse, tags=["Job"], summary="Create a new job")
+@limiter.limit("1/2 second")
 def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, proxies: list, do_parsing: bool, parallel_count: int, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
     This endpoint is used to create a new job, n number of urls and proxies can be passed, even 1 url and 1 proxy can be passed
     """
-    # TODO: IMPORTANT: a delay of 1 second between each request is required one request per second 
-    # only for the same user or may be 1 request per 10 seconds for the same user
     try:
         process_job_obj = ProcessJob(urls=urls, proxies=proxies, do_parsing=do_parsing, parallel=parallel_count, user=user)
         job_data = process_job_obj.run()
@@ -209,7 +216,6 @@ def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, 
     except Exception as exc_info:
         logging.error(exc_info)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
-
 
 
 @app.post("/webhook/stripe", response_class=JSONResponse, tags=["Webhook"], summary="Stripe Webhook")
@@ -231,7 +237,6 @@ async def stripe_webhook(request: Request) -> JSONResponse:
     except Exception as exc_info:
         logging.error(exc_info)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
-    
 
 
 # save proxies to the database - edit, delete, add more proxies
