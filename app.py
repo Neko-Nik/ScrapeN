@@ -25,6 +25,7 @@ from src.utils.user.auth import get_user_token
 from src.utils.user.handler import User
 from src.scraping.main import ProcessJob
 from src.utils.user.postgresql import JobPostgreSQLCRUD
+from src.utils.user.stripe_manager import StripeManager
 
 
 # Initialization
@@ -69,8 +70,7 @@ async def input_data_exception_handler(request: Request, exc: All_Exceptions):
 #    Endpoints    #
 
 # Logs of API
-@app.get("/logs", response_class=HTMLResponse,
-        tags=["Logs"], summary="Logs of API")
+@app.get("/logs", response_class=HTMLResponse, tags=["Logs"], summary="Logs of API")
 def view_logs(request: Request) -> HTMLResponse:
     """
     This endpoint is used to view the logs of the API in a web page
@@ -137,7 +137,7 @@ def delete_user(request: Request, user: dict=Depends(get_user_token)) -> JSONRes
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
-@app.get("/job/status/{job_id}", response_class=JSONResponse, tags=["Job"], summary="Job Status")
+@app.get("/job/{job_id}/status", response_class=JSONResponse, tags=["Job"], summary="Job Status")
 def job_status(request: Request, job_id: str, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
     This endpoint is used to scrape status of the given job id
@@ -168,7 +168,7 @@ def get_all_jobs(request: Request, user: dict=Depends(get_user_token)) -> JSONRe
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
-@app.get("/job/download/{job_id}", response_class=FileResponse, tags=["Job"], summary="Download processed job zip file")
+@app.get("/job/{job_id}/download", response_class=FileResponse, tags=["Job"], summary="Download processed job zip file")
 def download_job_file(request: Request, job_id: str, user: dict=Depends(get_user_token)) -> FileResponse:
     """
     This endpoint is used to download processed job zip file from the given job id
@@ -191,10 +191,11 @@ def download_job_file(request: Request, job_id: str, user: dict=Depends(get_user
 @app.post("/job", response_class=JSONResponse, tags=["Job"], summary="Create a new job")
 def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, proxies: list, do_parsing: bool, parallel_count: int, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
-    This endpoint is used to create a new job
+    This endpoint is used to create a new job, n number of urls and proxies can be passed, even 1 url and 1 proxy can be passed
     """
+    # TODO: IMPORTANT: a delay of 1 second between each request is required one request per second 
+    # only for the same user or may be 1 request per 10 seconds for the same user
     try:
-        
         process_job_obj = ProcessJob(urls=urls, proxies=proxies, do_parsing=do_parsing, parallel=parallel_count, user=user)
         job_data = process_job_obj.run()
 
@@ -210,6 +211,27 @@ def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, 
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
+
+@app.post("/webhook/stripe", response_class=JSONResponse, tags=["Webhook"], summary="Stripe Webhook")
+async def stripe_webhook(request: Request) -> JSONResponse:
+    """
+    This endpoint is used to handle stripe webhook
+    """
+    try:
+        payload = await request.body()
+        headers = request.headers
+        stripe_signature = headers.get('stripe-signature','')
+        if not stripe_signature:
+            raise All_Exceptions( "Invalid stripe signature", status.HTTP_400_BAD_REQUEST )
+
+        stripe_obj = StripeManager()
+        stripe_obj.webhook_handler(payload, stripe_signature)
+        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Webhook handled successfully"} )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+    
 
 
 # save proxies to the database - edit, delete, add more proxies
@@ -241,9 +263,9 @@ def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, 
     # created_at - job created at - datetime
     # parse_text - job parse text - boolean
     # parallel_count - job parallel count - integer
-    # urls_scraped - job urls scraped - TEXT
+    # urls_scraped - job urls scraped - TEXT    # remove
     # urls_failed - job urls failed - TEXT
-    # proxies_used - job proxies used - TEXT
+    # proxies_used - job proxies used - TEXT    # remove
     # proxies_failed - job proxies failed - TEXT
     # points_used - job points used - integer
     # zip_file_path - job zip file path - string
@@ -260,6 +282,6 @@ def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, 
 
 if __name__ == '__main__':
     # reload=True - server will automatically restart after code changes
-    uvicorn.run('app:app', host='0.0.0.0', port=8080, reload=True)
+    uvicorn.run('app:app', host='0.0.0.0', port=8083, reload=True)
 
 # 184.174.126.249:6541:olmjtxsz:yccmlx17olxs

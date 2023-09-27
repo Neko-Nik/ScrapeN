@@ -2,9 +2,36 @@ import stripe
 from src.utils.base.basic import retry
 
 
+import json
+def save_to_json_file(file_path, data):
+    with open(file_path, 'w') as outfile:
+        json.dump(data, outfile, indent=4)
+
+
+class StripePlanManager:
+    def __init__(self, event_data):
+        stripe.api_key = "sk_test_51NbdcnSG8jX2WdcmZA7QQaWe4GoKY9wVNEWZV2E3SkHL5Ymbds1d4DWBUVZeWbwAc5gxoQOsqgXojs7lpLI0QLG300CRSSIzRo"
+        self.event_data = event_data
+
+    # If any issue do only one thing: raise error don't return false or something else
+
+    def handle_sub_creation(self, subscription):
+        print("Subscription created")
+        save_to_json_file("subscription_created.json", subscription)
+
+    def handle_sub_deletion(self, subscription):
+        print("Subscription deleted")
+        save_to_json_file("subscription_deleted.json", subscription)
+
+    def handle_sub_update(self, subscription):
+        print("Subscription updated")
+        save_to_json_file("subscription_updated.json", subscription)
+
+
 class StripeManager:
     def __init__(self):
         stripe.api_key = "sk_test_51NbdcnSG8jX2WdcmZA7QQaWe4GoKY9wVNEWZV2E3SkHL5Ymbds1d4DWBUVZeWbwAc5gxoQOsqgXojs7lpLI0QLG300CRSSIzRo"
+        self.webhook_signing_secret = "whsec_82gOhSl2mKaqMKMeKUGz00aHgyA2YmPC"
 
     @retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2 )
     def _check_customer_exists(self, email):
@@ -82,4 +109,32 @@ class StripeManager:
             stripe.Subscription.delete(get_current_plan.id)
         customer.delete()
         return True
+
+    # @retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2 )
+    def webhook_handler(self, payload, sig_header):
+        event = None
+
+        try:
+            event = stripe.Webhook.construct_event(payload, sig_header, self.webhook_signing_secret)
+        except ValueError as e:
+            # Invalid payload
+            raise e
+        except stripe.error.SignatureVerificationError as e:
+            # Invalid signature
+            raise e
+        
+        if not event:
+            raise ValueError("Event is empty") # or return false
+
+        plan_manager = StripePlanManager(event)
+
+        match event['type']:
+            case 'customer.subscription.created':
+                plan_manager.handle_sub_creation(event['data']['object'])
+            case 'customer.subscription.deleted':
+                plan_manager.handle_sub_deletion(event['data']['object'])
+            case 'customer.subscription.updated':
+                plan_manager.handle_sub_update(event['data']['object'])
+            case _:
+                print(f"Unhandled event type {event['type']}")
 
