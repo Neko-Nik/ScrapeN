@@ -1,6 +1,6 @@
 """All the main function that will be executed when the API is called"""
 
-from src.utils.base.libraries import logging
+from src.utils.base.libraries import logging, os
 from src.sitemap.main import get_urls_from_xml
 from src.scraping.main import WebScraper, ProcessJob
 from src.scraping.base_functions import zip_folder_and_verify
@@ -19,25 +19,34 @@ def render_sitemap(url: str) -> dict:
     return resp
 
 
-def render_scrape(urls: list, proxies: list, job_obj: ProcessJob, do_parsing: bool=True, parallel: int=1, job_data: dict={}) -> None:
+def render_scrape(process_job_obj: ProcessJob) -> None:
     """Scrape data from the given URL with the given proxy"""
-    user_email = job_obj.user.get("email", "unknown")
+    
+    # process_job_obj use this to get all the data
+    job_id = process_job_obj.job_id
+    urls = process_job_obj.urls
+    proxies = process_job_obj.proxies
+    num_parallel_workers = process_job_obj.parallel
+    do_parsing = process_job_obj.do_parsing
+    output_dir_for_urls_processed = os.path.join(process_job_obj.job_folder_path, job_id)
+    os.makedirs(output_dir_for_urls_processed, exist_ok=True)
+
 
     # Start the scraping process
-    logging.debug(f"Scraping {len(urls)} urls with {len(proxies)} proxies for user: {user_email} with job_id: {job_obj.job_id}")
-    scraper_obj = WebScraper(num_workers=parallel, do_parse_html=do_parsing, output_dir=job_data["folder_path"])
+    process_job_obj._save_logs(f"Scraping {len(urls)} urls with {len(proxies)} proxies")
+    scraper_obj = WebScraper(num_workers=num_parallel_workers, do_parse_html=do_parsing, output_dir=output_dir_for_urls_processed)
     scrape_results = scraper_obj.scrape_urls(urls=urls, proxies_list=proxies)
-    
+    process_job_obj._save_logs(f"Scraping completed!")
+
     # Update the job object with the scrape results and set status as zippping
-    logging.debug(f"Updating job object with scrape results and setting status as zippping for user: {user_email} with job_id: {job_obj.job_id}")
-    job_obj.update(scrape_results)
+    process_job_obj.update(scrape_results)
 
     # Zip the output folder and verify the hash
-    logging.debug(f"Zipping the output folder and verifying the hash for user: {user_email} with job_id: {job_obj.job_id}")
-    file_path, file_hash = zip_folder_and_verify(folder_path=job_data["folder_path"])
+    process_job_obj._save_logs(f"Zipping the output folder and verifying the hash")
+    file_path, file_hash = zip_folder_and_verify(folder_path=output_dir_for_urls_processed)
     if not file_path or not file_hash:
-        job_obj.failed()
+        process_job_obj.failed(message="Error while zipping the output folder")
 
-    logging.debug(f"Job completed for user: {user_email} with job_id: {job_obj.job_id}")
-    job_obj.update_job_completed(**{"zip_file_path": file_path, "zip_file_hash": file_hash})
+    process_job_obj.update_job_completed(**{"zip_file_path": file_path, "zip_file_hash": file_hash})
 
+    # Send email to the user or call the webhook

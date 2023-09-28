@@ -82,9 +82,7 @@ class JobProfile:
 
             # parse_text validation
             parse_text = profile_data.get("parse_text", True)
-            if not isinstance(parse_text, bool):
-                return Error(code=412, message="parse_text must be a boolean")
-            
+
             # proxies validation
             proxies = profile_data.get("proxies", [])
             if not isinstance(proxies, list):
@@ -99,6 +97,13 @@ class JobProfile:
                 parallel_count_validator = self._parallel_count_validator(parallel_count)
                 if isinstance(parallel_count_validator, Error):
                     return parallel_count_validator
+            else:
+                user_obj = User()
+                user_db_data = user_obj.get_user_data(self.user["email"], self.user["uid"], self.user["email_verified"])
+                if isinstance(user_db_data, Error):
+                    return user_db_data
+                parallel_count = user_db_data.get("parallel_count", 0)
+            
 
             profile_data = {
                 "parallel_count": parallel_count,

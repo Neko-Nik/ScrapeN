@@ -4,6 +4,8 @@ from src.utils.base.basic import Error
 from src.utils.base.constants import LIST_OF_SKIP_CODES, OUTPUT_ROOT_DIR
 from src.scraping.parsing import parse_html
 from src.utils.user.postgresql import UserPostgreSQLCRUD, JobPostgreSQLCRUD
+from src.profiles.main import JobProfile
+from src.proxies.main import Proxies
 
 
 class WebScraper:
@@ -122,18 +124,52 @@ class WebScraper:
 
 
 class ProcessJob:
-    def __init__(self, urls: list, proxies: list, do_parsing: bool = True, parallel: int = 1, user: dict = {}):
+    def __init__(self, urls: list, user: dict, profile_name: str, job_name: str):
         self.jobDB = JobPostgreSQLCRUD()
         self.userDB = UserPostgreSQLCRUD()
-        self.urls = urls
-        self.proxies = proxies
-        self.do_parsing = do_parsing
-        self.parallel = parallel
-        self.job_id = None
-        self.folder_path = None
+        self.jobProfile = JobProfile(user=user)
+        self.proxiesObj = Proxies(user=user)
+        self.logs = []
         self.user = user
+        self.urls = urls
+        self.profile_name = profile_name
+        self.job_name = job_name    # TODO: add the job name to the database
+        self.preprocessing_status = self._pre_processing()  # will add: do_parsing, parallel, proxies
+        self.job_id = None
+        self.job_folder_path = None
         self.allocated_parallel = 0
         self.user_db_data = {}
+
+    def _save_logs(self, message):
+        """Save the logs to the logs file"""
+        message = {
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "message": message
+        }
+        self.logs.append(message)
+        with open(os.path.join(self.job_folder_path, "logs.json"), "w") as f:
+            json.dump(self.logs, f, indent=4)
+
+    def _pre_processing(self):
+        """Pre processing for the job"""
+        current_profile = self.jobProfile.all_profiles.get(self.profile_name, None)
+        if not current_profile:
+            return Error(code=404, message=f"Profile {self.profile_name} not found")
+
+        self.do_parsing = current_profile.get("parse_text", True)
+        self.parallel = current_profile.get("parallel_count", 0)
+
+        self.proxies = current_profile.get("proxies", [])
+        if not self.proxies:
+            self.proxies = self.proxiesObj.proxies
+        if not self.proxies:
+            return Error(code=412, message="There are no proxies available, please add proxies to either the profile or at the user level")
+
+        self.handle_file_based_urls()
+        if not self.urls:
+            return Error(code=412, message="No URLs left after removing the file based URLs and invalid URLs")
+
+        return True
 
     def _string_connvert(self, date: str):
         date = str(date)
@@ -175,7 +211,8 @@ class ProcessJob:
         formatted_time = current_time.strftime("%Y%m%d%H%M%S")
         # Convert the string to a unique string
         self.job_id = self._string_connvert(formatted_time)
-        self.folder_path = os.path.join(OUTPUT_ROOT_DIR, self.user["email"], self.job_id)
+        os.makedirs(os.path.join(OUTPUT_ROOT_DIR, self.user["email"], "jobs", self.job_id), exist_ok=True)
+        self.job_folder_path = os.path.join(OUTPUT_ROOT_DIR, self.user["email"], "jobs", self.job_id)
 
     def _has_file_extension(self, url: str):
         """Check if the given URL has a file extension"""
@@ -191,6 +228,8 @@ class ProcessJob:
     def handle_file_based_urls(self):
         """Handle the file based URLs"""
         self.urls = [url for url in self.urls if not self._has_file_extension(url)]
+        # validate if its a valid url or not
+        self.urls = [url for url in self.urls if urllib.parse.urlparse(url).scheme in ["http", "https"]]
 
     def reduce_points(self):
         """Reduce the points from the user"""
@@ -204,25 +243,26 @@ class ProcessJob:
                 return True
         return False
 
-    def create_job_in_db(self):
+    def _create_job_in_db(self):
         """Create a job in the database"""
         job_data = {
-            "job_id": self.user["email"] + '|' + self.job_id,
+            "job_uid": self.user["email"] + '|' + self.job_id,
+            "job_id": self.job_id,
             "email": self.user["email"],
             "status": "processing",
-            "urls": json.dumps(self.urls),
-            "proxies": json.dumps(self.proxies),
-            "do_parsing": self.do_parsing,
-            "parallel_count": self.parallel,
+            "profile_name": self.profile_name,
+            "job_name": self.job_name,
             "created_at": datetime.now()
         }
         self.jobDB.create(**job_data)
+        self._save_logs("Updated the job details in the database")
 
     def pre_conditions(self):
         user_email = self.user["email"]
         user_data = self.userDB.read(email=user_email)
         self.user_db_data = user_data
         self.allocated_parallel = self.user_db_data.get("parallel_count", 0)
+        self._save_logs("Starting to check the pre conditions for the job")
 
         if not user_data:
             return Error(code=404, message=f"User with email {user_email} not found")
@@ -237,67 +277,127 @@ class ProcessJob:
         if not has_enough_points:
             return Error(code=412, message="Not enough points to scrape the given URLs")
 
+        self._save_logs("All the pre conditions are met, so proceeding with the job")
+
         return {"has_enough_points": has_enough_points}
+    
+    def _save_job_data_files(self):
+        self._save_logs("Saving the job data files")
+        config_data = {
+            "profile_name": self.profile_name,
+            "job_name": self.job_name,
+            "do_parsing": self.do_parsing,
+            "parallel": self.parallel,
+            "urls": self.urls,
+            "proxies": self.proxies
+        }
+        
+        with open(os.path.join(self.job_folder_path, "config.json"), "w") as f:
+            json.dump(config_data, f, indent=4)
+        self._save_logs("Saved the job config file")
+        # after processing update this file with the following data
+        # config["urls_scraped"] = []
+        # config["urls_failed"] = []
+        # config["proxies_used"] = []
+        # config["proxies_failed"] = []
+        # config["points_used"] = 0
+        # config["parallel_count"] = 0
 
     def run(self):
         """Run the process"""
+        if isinstance(self.preprocessing_status, Error):
+            return self.preprocessing_status
         self.make_job_id()
-        self.handle_file_based_urls()
+        self._save_logs("Job creation preprocessing step is completed")
+
         pre_process = self.pre_conditions()
         if isinstance(pre_process, Error):
             return pre_process
 
-        self.create_job_in_db()
-
+        # self._create_job_in_db()    # TODO: DB: modify the db table to add the job name and remove others if not needed
+        self._save_job_data_files()
         return {
             "job_id": self.job_id,
-            "folder_path": self.folder_path,
             "urls": self.urls,
-            "proxies": self.proxies,
-            "do_parsing": self.do_parsing,
-            "parallel_count": self.parallel,
-            "has_enough_points": pre_process["has_enough_points"],
+            "profile_name": self.profile_name
         }
+    
+    def _post_processing(self, scrape_results):
+        """Post processing for the job"""
+        self._save_logs("Starting the post processing for the job")
+        config_data = {}
+        with open(os.path.join(self.job_folder_path, "config.json"), "r") as f:
+            config_data = json.load(f)
+        
+        # remove success from the failed list
+        urls_failed = [url for url in scrape_results["urls_failed"] if url not in scrape_results["urls_scraped"]]
+
+        # increase the points by the number of urls not scraped
+        user_db_data = self.userDB.read(self.user["email"])
+        current_points = user_db_data.get("points", 0)
+        add_points = len(urls_failed)
+        points_used = len(scrape_results["urls_scraped"])
+        new_points = current_points + add_points
+        self.userDB.update(self.user["email"], {"points": new_points})
+
+        self._save_logs(f"Updated with the new points with {new_points} points")
+
+        config_data["urls_scraped"] = scrape_results["urls_scraped"]
+        config_data["urls_failed"] = scrape_results["urls_failed"]
+        config_data["proxies_used"] = scrape_results["proxies_used"]
+        config_data["proxies_failed"] = scrape_results["proxies_failed"]
+        config_data["points_used"] = points_used
+        config_data["points_added"] = add_points
+        config_data["points_remaining"] = new_points
+
+        with open(os.path.join(self.job_folder_path, "config.json"), "w") as f:
+            json.dump(config_data, f, indent=4)
+        
+        self._save_logs("Post processing for the job is completed, saved the results to the config file")
+
+        return config_data
 
     def update(self,scrape_results):
         """Update the process"""
-        # increase the points by the number of urls not scraped
-        urls_scraped = scrape_results["urls_scraped"]
-        urls_failed = scrape_results["urls_failed"]
-        # remove success from the failed list
-        urls_done = [url for url in urls_failed if url not in urls_scraped]
+        self._save_logs("Processing the scrape results")
+
+        config_data = self._post_processing(scrape_results)
 
         # update the status in db as zipping
         self.jobDB.update(self.user["email"] + '|' + self.job_id, {
             "status": "zipping",
-            "urls_scraped": json.dumps(scrape_results["urls_scraped"]),
-            "urls_failed": json.dumps(scrape_results["urls_failed"]),
-            "proxies_used": json.dumps(scrape_results["proxies_used"]),
-            "proxies_failed": json.dumps(scrape_results["proxies_failed"]),
-            "points_used": len(urls_scraped),
-            # "parallel_count": 
-            # TODO: add the parallel count used back to the user
+            "points_used": config_data["points_used"],
+            "urls_scraped": len(config_data["urls_scraped"]),
+            "urls_failed": len(config_data["urls_failed"]),
+            "proxies_used": len(config_data["proxies_used"]),
+            "proxies_failed": len(config_data["proxies_failed"]),
+            "points_added": config_data["points_added"],
+            "points_remaining": config_data["points_remaining"]
         })
-
-        # increase the points by the number of urls not scraped
-        points = len(urls_done)
-        user_email = self.user["email"]
-        user = self.userDB.read(user_email)
-        if user:
-            current_points = user.get("points", 0)
-            new_points = current_points + points
-            self.userDB.update(user_email, {"points": new_points})
-        else:
-            self.jobDB.update(user_email + '|' + self.job_id, {"status": "failed due to user not found"})
-            return False
+        self._save_logs("Updated the job status in the database")
+        return True
 
     def failed(self, message=""):
         """Update the process as failed"""
         self.jobDB.update(self.user["email"] + '|' + self.job_id, {"status": "Failed: " + message})
+        self._save_logs("Failed the job with message: " + message)
         return True
     
     def update_job_completed(self, zip_file_path, zip_file_hash):
         """Update the process as completed"""
+        self._save_logs("Updating the job as completed in the database and config file")
         self.jobDB.update(self.user["email"] + '|' + self.job_id, {"status": "completed", "zip_file_path": zip_file_path, "zip_file_hash": zip_file_hash})
+
+        config_data = {}
+        with open(os.path.join(self.job_folder_path, "config.json"), "r") as f:
+            config_data = json.load(f)
+
+        config_data["zip_file_path"] = zip_file_path
+        config_data["zip_file_hash"] = zip_file_hash
+
+        with open(os.path.join(self.job_folder_path, "config.json"), "w") as f:
+            json.dump(config_data, f, indent=4)
+
+        self._save_logs("Job completed successfully!")
         return True
 

@@ -44,7 +44,7 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
     title="Neko Nik - ScrapeN API",
     description="This ScrapeN API is used to scrape data from the web",
-    version="1.6.6",
+    version="1.6.7",
     docs_url="/",
     redoc_url="/redoc",
     include_in_schema=True,
@@ -167,10 +167,11 @@ def delete_user(request: Request, user: dict=Depends(get_user_token)) -> JSONRes
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
-@app.get("/job/{job_id}/status", response_class=JSONResponse, tags=["Job"], summary="Job Status")
-def job_status(request: Request, job_id: str, user: dict=Depends(get_user_token)) -> JSONResponse:
+@app.get("/job", response_class=JSONResponse, tags=["Job"], summary="Job one or all job details")
+def job_status(request: Request, job_id: str=None, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
-    This endpoint is used to scrape status of the given job id
+    This endpoint is used to scrape status of the job id
+    or if job id is not given, then it will return all the jobs of the user
     """
     try:
         job_id = user["email"] + "|" + job_id
@@ -179,22 +180,10 @@ def job_status(request: Request, job_id: str, user: dict=Depends(get_user_token)
         if not job_data:
             return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Job not found, please check the job id"} )
 
+        # TODO: if job id is not given, then it will return all the jobs of the user only from the db not all the data
+        # if job id is given, then read the logs and config from the file and return the data along with the db data
+
         return JSONResponse( status_code=status.HTTP_200_OK, content=job_data )
-    except Exception as exc_info:
-        logging.error(exc_info)
-        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
-
-
-@app.get("/job/list", response_class=JSONResponse, tags=["Job"], summary="Job Status")
-def get_all_jobs(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
-    """
-    This endpoint is used to get all the jobs of the user
-    """
-    try:
-        job_obj = JobPostgreSQLCRUD()
-        all_jobs = job_obj.filter_jobs(filters={"email": user["email"], "filter_by": "email"})
-
-        return JSONResponse( status_code=status.HTTP_200_OK, content=all_jobs )
     except Exception as exc_info:
         logging.error(exc_info)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
@@ -219,24 +208,24 @@ def download_job_file(request: Request, job_id: str, user: dict=Depends(get_user
         logging.error(exc_info)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
+
 # TODO: update the parallel count of the job (parallel units)
 @app.post("/job", response_class=JSONResponse, tags=["Job"], summary="Create a new job")
 @limiter.limit("1/2 second")
-def create_job(request: Request, background_tasks: BackgroundTasks, urls: list, proxies: list, do_parsing: bool,
-               parallel_count: int, user: dict=Depends(get_user_token)) -> JSONResponse:
+def create_job(request: Request, background_tasks: BackgroundTasks, profile_name: str, urls: list, job_name: str=None, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
     This endpoint is used to create a new job, n number of urls and proxies can be passed, even 1 url and 1 proxy can be passed
     """
     try:
-        process_job_obj = ProcessJob(urls=urls, proxies=proxies, do_parsing=do_parsing, parallel=parallel_count, user=user)
+        process_job_obj = ProcessJob(urls=urls, user=user, profile_name=profile_name, job_name=job_name)
         job_data = process_job_obj.run()
 
         if isinstance(job_data, Error):
             return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": job_data.message} )
 
         else:
-            background_tasks.add_task(render_scrape, urls=urls, proxies=proxies, do_parsing=do_parsing, parallel=parallel_count, job_data=job_data, job_obj=process_job_obj)
-            return JSONResponse( status_code=status.HTTP_200_OK, content={"job_id": job_data["job_id"], "total_urls": len(urls), "total_proxies": len(proxies)} )
+            background_tasks.add_task(render_scrape, process_job_obj=process_job_obj)
+            return JSONResponse( status_code=status.HTTP_200_OK, content=job_data )
 
     except Exception as exc_info:
         logging.error(exc_info)
