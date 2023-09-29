@@ -12,6 +12,7 @@ Deprecated==1.2.14
 dnspython==2.3.0
 email-validator==2.0.0.post2
 fastapi==0.99.1
+filelock==3.12.4
 firebase-admin==6.2.0
 google-api-core==2.11.1
 google-api-python-client==2.100.0
@@ -68,6 +69,7 @@ uritemplate==4.1.1
 urllib3==1.26.16
 uvicorn==0.22.0
 uvloop==0.17.0
+validators==0.22.0
 watchfiles==0.19.0
 websockets==11.0.3
 wrapt==1.15.0
