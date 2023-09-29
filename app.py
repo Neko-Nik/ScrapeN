@@ -29,7 +29,7 @@ from src.utils.base.libraries import (
 )
 from src.utils.base.constants import NUMBER_OF_LOGS_TO_DISPLAY, OUTPUT_ROOT_DIR
 from src.main import render_sitemap, render_scrape
-from src.utils.user.auth import get_user_token, get_access_token_from_refresh_token
+from src.utils.user.auth import get_user_token
 from src.utils.user.handler import User
 from src.scraping.main import ProcessJob
 from src.utils.base.basic import Error
