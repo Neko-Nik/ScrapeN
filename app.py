@@ -44,7 +44,7 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
     title="Neko Nik - ScrapeN API",
     description="This ScrapeN API is used to scrape data from the web",
-    version="1.6.7",
+    version="1.7.1",
     docs_url="/",
     redoc_url="/redoc",
     include_in_schema=True,
@@ -174,14 +174,18 @@ def job_status(request: Request, job_id: str=None, user: dict=Depends(get_user_t
     or if job id is not given, then it will return all the jobs of the user
     """
     try:
-        job_id = user["email"] + "|" + job_id
-        job_obj = JobPostgreSQLCRUD()
-        job_data = job_obj.read(job_id)
-        if not job_data:
-            return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Job not found, please check the job id"} )
+        if job_id:
+            job_uid = user["email"] + "|" + job_id
+            job_obj = JobPostgreSQLCRUD()
+            job_data = job_obj.read(job_uid=job_uid)
+            if not job_data:
+                return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Job not found, please check the job id"} )
+        else:
+            job_obj = JobPostgreSQLCRUD()
+            job_data = job_obj.filter_by_email(email=user["email"])
 
-        # TODO: if job id is not given, then it will return all the jobs of the user only from the db not all the data
-        # if job id is given, then read the logs and config from the file and return the data along with the db data
+        if isinstance(job_data, Error):
+            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": job_data.message} )
 
         return JSONResponse( status_code=status.HTTP_200_OK, content=job_data )
     except Exception as exc_info:
@@ -195,29 +199,25 @@ def download_job_file(request: Request, job_id: str, user: dict=Depends(get_user
     This endpoint is used to download processed job zip file from the given job id
     """
     try:
-        job_obj = JobPostgreSQLCRUD()
-        job_data = job_obj.read(job_id=user["email"] + "|" + job_id)
-        zip_file_path = job_data.get("zip_file_path", None)
-        if zip_file_path:
-            zip_file_path = os.path.join(os.getcwd(), zip_file_path)
-            return FileResponse(zip_file_path, media_type='application/zip', filename=zip_file_path.split("/")[-1])
-        else:
-            return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Job not found"} )
+        zip_file_path = os.path.join(OUTPUT_ROOT_DIR, user["email"], "jobs", job_id, job_id + ".zip")
+        if not os.path.exists(zip_file_path):
+            return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Job zip file not found, please check the job id or wait for the job to complete"} )
+
+        return FileResponse(zip_file_path, media_type="application/zip", filename=job_id + ".zip")
 
     except Exception as exc_info:
         logging.error(exc_info)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
-# TODO: update the parallel count of the job (parallel units)
 @app.post("/job", response_class=JSONResponse, tags=["Job"], summary="Create a new job")
 @limiter.limit("1/2 second")
-def create_job(request: Request, background_tasks: BackgroundTasks, profile_name: str, urls: list, job_name: str=None, user: dict=Depends(get_user_token)) -> JSONResponse:
+def create_job(request: Request, background_tasks: BackgroundTasks, profile_name: str, urls: list, job_name: str=None, job_description: str=None, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
     This endpoint is used to create a new job, n number of urls and proxies can be passed, even 1 url and 1 proxy can be passed
     """
     try:
-        process_job_obj = ProcessJob(urls=urls, user=user, profile_name=profile_name, job_name=job_name)
+        process_job_obj = ProcessJob(urls=urls, user=user, profile_name=profile_name, job_name=job_name, job_description=job_description)
         job_data = process_job_obj.run()
 
         if isinstance(job_data, Error):

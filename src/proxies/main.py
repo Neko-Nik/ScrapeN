@@ -87,7 +87,7 @@ class Proxies:
 
     def delete(self, delete_list: list=[]) -> bool:
         try:
-            if delete_list:
+            if (delete_list != ['']) or (delete_list != []):
                 with self.lock:
                     for proxy in delete_list:
                         if proxy in self.proxies:

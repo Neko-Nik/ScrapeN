@@ -124,7 +124,7 @@ class WebScraper:
 
 
 class ProcessJob:
-    def __init__(self, urls: list, user: dict, profile_name: str, job_name: str):
+    def __init__(self, urls: list, user: dict, profile_name: str, job_name: str, job_description: str=""):
         self.jobDB = JobPostgreSQLCRUD()
         self.userDB = UserPostgreSQLCRUD()
         self.jobProfile = JobProfile(user=user)
@@ -133,7 +133,8 @@ class ProcessJob:
         self.user = user
         self.urls = urls
         self.profile_name = profile_name
-        self.job_name = job_name    # TODO: add the job name to the database
+        self.job_name = job_name
+        self.job_description = job_description
         self.preprocessing_status = self._pre_processing()  # will add: do_parsing, parallel, proxies
         self.job_id = None
         self.job_folder_path = None
@@ -242,17 +243,27 @@ class ProcessJob:
                 self.userDB.update(self.user["email"], {"points": current_points - initial_points})
                 return True
         return False
+    
+    def reduce_parallel_units(self):
+        """Reduce the parallel units from the user"""
+        current_parallel = self.user_db_data.get("parallel_count", 0)
+        if self.user_db_data:
+            if current_parallel >= self.parallel:
+                logging.debug(f"Reducing {self.parallel} parallel units from user {self.user['email']} with current parallel units {current_parallel}")
+                self.userDB.update(self.user["email"], {"parallel_count": current_parallel - self.parallel})
+                return True
+        return False
 
     def _create_job_in_db(self):
         """Create a job in the database"""
         job_data = {
             "job_uid": self.user["email"] + '|' + self.job_id,
-            "job_id": self.job_id,
             "email": self.user["email"],
             "status": "processing",
             "profile_name": self.profile_name,
+            "created_at": datetime.now(),
             "job_name": self.job_name,
-            "created_at": datetime.now()
+            "job_description": self.job_description
         }
         self.jobDB.create(**job_data)
         self._save_logs("Updated the job details in the database")
@@ -270,8 +281,11 @@ class ProcessJob:
         if not self.urls:
             return Error(code=412, message="No URLs left after removing the file based URLs")
 
-        if self.parallel > self.allocated_parallel:
-            return Error(code=412, message=f"Parallel count {self.parallel} is greater than allocated parallel count {self.allocated_parallel}")
+        has_enough_parallel_units = self.reduce_parallel_units()
+        if not has_enough_parallel_units:
+            return Error(code=412, message=f"Parallel count {self.parallel} is greater than \
+                         allocated parallel count {self.allocated_parallel} or You don't have enough \
+                            parallel units to scrape the given URLs with the given profile")
 
         has_enough_points = self.reduce_points()
         if not has_enough_points:
@@ -295,13 +309,6 @@ class ProcessJob:
         with open(os.path.join(self.job_folder_path, "config.json"), "w") as f:
             json.dump(config_data, f, indent=4)
         self._save_logs("Saved the job config file")
-        # after processing update this file with the following data
-        # config["urls_scraped"] = []
-        # config["urls_failed"] = []
-        # config["proxies_used"] = []
-        # config["proxies_failed"] = []
-        # config["points_used"] = 0
-        # config["parallel_count"] = 0
 
     def run(self):
         """Run the process"""
@@ -314,7 +321,7 @@ class ProcessJob:
         if isinstance(pre_process, Error):
             return pre_process
 
-        # self._create_job_in_db()    # TODO: DB: modify the db table to add the job name and remove others if not needed
+        self._create_job_in_db()
         self._save_job_data_files()
         return {
             "job_id": self.job_id,
@@ -338,7 +345,8 @@ class ProcessJob:
         add_points = len(urls_failed)
         points_used = len(scrape_results["urls_scraped"])
         new_points = current_points + add_points
-        self.userDB.update(self.user["email"], {"points": new_points})
+        new_parallel_units = user_db_data.get("parallel_count", 0) + self.parallel
+        self.userDB.update(self.user["email"], {"points": new_points, "parallel_count": new_parallel_units})
 
         self._save_logs(f"Updated with the new points with {new_points} points")
 
@@ -367,12 +375,8 @@ class ProcessJob:
         self.jobDB.update(self.user["email"] + '|' + self.job_id, {
             "status": "zipping",
             "points_used": config_data["points_used"],
-            "urls_scraped": len(config_data["urls_scraped"]),
             "urls_failed": len(config_data["urls_failed"]),
-            "proxies_used": len(config_data["proxies_used"]),
-            "proxies_failed": len(config_data["proxies_failed"]),
-            "points_added": config_data["points_added"],
-            "points_remaining": config_data["points_remaining"]
+            "proxies_failed": len(config_data["proxies_failed"])
         })
         self._save_logs("Updated the job status in the database")
         return True
@@ -386,7 +390,7 @@ class ProcessJob:
     def update_job_completed(self, zip_file_path, zip_file_hash):
         """Update the process as completed"""
         self._save_logs("Updating the job as completed in the database and config file")
-        self.jobDB.update(self.user["email"] + '|' + self.job_id, {"status": "completed", "zip_file_path": zip_file_path, "zip_file_hash": zip_file_hash})
+        self.jobDB.update(self.user["email"] + '|' + self.job_id, {"status": "completed"})
 
         config_data = {}
         with open(os.path.join(self.job_folder_path, "config.json"), "r") as f:
