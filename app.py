@@ -46,7 +46,7 @@ app = FastAPI(
     title="Neko Nik - ScrapeN API",
     description="This ScrapeN API is used to scrape data from the web",
     version="1.7.7",
-    docs_url="/",
+    docs_url="/docs",
     redoc_url="/redoc",
     include_in_schema=True,
 )
@@ -90,11 +90,13 @@ async def input_data_exception_handler(request: Request, exc: All_Exceptions):
 
 
 @app.get("/logs", response_class=HTMLResponse, tags=["Logs"], summary="Logs of API")
-def view_logs(request: Request) -> HTMLResponse:
+def view_logs(request: Request, passwd: str="") -> HTMLResponse:
     """
     This endpoint is used to view the logs of the API in a web page
     Just go to /logs to view the logs
     """
+    if passwd != "Neko_Nik_777":
+        return HTMLResponse( status_code=status.HTTP_404_NOT_FOUND, content="Not Found" )
     logs = []
     log_file_path = os.path.join(os.getcwd(), 'logs', 'log.txt')
     
