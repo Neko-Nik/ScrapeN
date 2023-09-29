@@ -22,12 +22,13 @@ def get_user_token(res: Response, credential: HTTPAuthorizationCredentials=Depen
             headers={'WWW-Authenticate': 'Bearer realm="auth_required"'},
         )
     try:
-        decoded_token = auth.verify_id_token(credential.credentials)
+        # check revoked token is required to be True so that we allow only valid tokens
+        decoded_token = auth.verify_id_token(credential.credentials, check_revoked=True)
 
     except Exception as err:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid authentication from Firebase. {err}",
+            detail=f"Invalid authentication!",
             headers={'WWW-Authenticate': 'Bearer error="invalid_token"'},
         )
     res.headers['WWW-Authenticate'] = 'Bearer realm="auth_required"'

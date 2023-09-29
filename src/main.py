@@ -48,7 +48,7 @@ def render_scrape(process_job_obj: ProcessJob) -> None:
     if not file_path or not file_hash:
         process_job_obj.failed(message="Error while zipping the output folder")
 
-    process_job_obj.update_job_completed(**{"zip_file_path": file_path, "zip_file_hash": file_hash})
+    results_data = process_job_obj.update_job_completed(**{"zip_file_path": file_path, "zip_file_hash": file_hash})
 
     config = json.loads(process_job_obj.user_db_data.get("config", "{}"))
     send_webhook_url_notification = config.get("webhook_url", False)
@@ -56,13 +56,12 @@ def render_scrape(process_job_obj: ProcessJob) -> None:
 
     if send_email_notification:
         process_job_obj._save_logs(f"Sending email to the user")
-        NotificationsEmail().send_email(email=process_job_obj.user_db_data["email"], subject="Job Completed", body="Job Completed")
+        NotificationsEmail().send_email(email=process_job_obj.user_db_data["email"], subject="Job Completed", body=f"Job Completed: {results_data}")
         process_job_obj._save_logs(f"Email sent to the user")
 
     if send_webhook_url_notification:
         process_job_obj._save_logs(f"Calling the webhook")
-        data = {"job_id": job_id, "status": "completed"}
-        NotificationWebhook(webhook_url=send_webhook_url_notification, data=data, email=process_job_obj.user_db_data["email"]).call_webhook()
+        NotificationWebhook(webhook_url=send_webhook_url_notification, data=results_data, email=process_job_obj.user_db_data["email"]).call_webhook()
         process_job_obj._save_logs(f"Webhook called completed")
 
     return None

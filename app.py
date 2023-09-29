@@ -11,7 +11,6 @@ from src.utils.base.libraries import (
     BackgroundTasks,
     Request,
     JSONResponse,
-    FileResponse,
     HTMLResponse,
     UploadFile,
     File,
@@ -25,11 +24,12 @@ from src.utils.base.libraries import (
     Limiter,
     get_remote_address,
     _rate_limit_exceeded_handler,
-    RateLimitExceeded
+    RateLimitExceeded,
+    StaticFiles
 )
 from src.utils.base.constants import NUMBER_OF_LOGS_TO_DISPLAY, OUTPUT_ROOT_DIR
 from src.main import render_sitemap, render_scrape
-from src.utils.user.auth import get_user_token
+from src.utils.user.auth import get_user_token, get_access_token_from_refresh_token
 from src.utils.user.handler import User
 from src.scraping.main import ProcessJob
 from src.utils.base.basic import Error
@@ -45,7 +45,7 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
     title="Neko Nik - ScrapeN API",
     description="This ScrapeN API is used to scrape data from the web",
-    version="1.7.1",
+    version="1.7.7",
     docs_url="/",
     redoc_url="/redoc",
     include_in_schema=True,
@@ -66,6 +66,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Download Static files
+app.mount("/download", app=StaticFiles(directory=OUTPUT_ROOT_DIR), name="Download Job Files")
 
 # Class for handling wrong input 
 class All_Exceptions(Exception):
@@ -129,6 +132,24 @@ def get_user_data(request: Request, user: dict=Depends(get_user_token)) -> JSONR
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
+@app.delete("/user", response_class=JSONResponse, tags=["User"], summary="Delete user account")
+def delete_user(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to delete user account
+    """
+    try:
+        user_obj = User()
+        data = user_obj.handle_user_deletion(user["email"])
+        if isinstance(data, Error) or not data:
+            return JSONResponse( status_code=status.HTTP_423_LOCKED, content={"message": "User not deleted, please delete linked data first"} )
+
+        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "User deleted successfully"})
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
 @app.post("/webhook/stripe", response_class=JSONResponse, tags=["Webhook"], summary="Stripe Webhook")
 async def stripe_webhook(request: Request) -> JSONResponse:
     """
@@ -144,24 +165,6 @@ async def stripe_webhook(request: Request) -> JSONResponse:
         stripe_obj = StripeManager()
         stripe_obj.webhook_handler(payload, stripe_signature)
         return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Webhook handled successfully"} )
-
-    except Exception as exc_info:
-        logging.error(exc_info)
-        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
-
-
-@app.delete("/user", response_class=JSONResponse, tags=["User"], summary="Delete user account")
-def delete_user(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
-    """
-    This endpoint is used to delete user account
-    """
-    try:
-        user_obj = User()
-        data = user_obj.handle_user_deletion(user["email"])
-        if isinstance(data, Error) or not data:
-            return JSONResponse( status_code=status.HTTP_423_LOCKED, content={"message": "User not deleted, please delete linked data first"} )
-
-        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "User deleted successfully"})
 
     except Exception as exc_info:
         logging.error(exc_info)
@@ -189,23 +192,6 @@ def job_status(request: Request, job_id: str=None, user: dict=Depends(get_user_t
             return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": job_data.message} )
 
         return JSONResponse( status_code=status.HTTP_200_OK, content=job_data )
-    except Exception as exc_info:
-        logging.error(exc_info)
-        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
-
-
-@app.get("/job/{job_id}/download", response_class=FileResponse, tags=["Job"], summary="Download processed job zip file")
-def download_job_file(request: Request, job_id: str, user: dict=Depends(get_user_token)) -> FileResponse:
-    """
-    This endpoint is used to download processed job zip file from the given job id
-    """
-    try:
-        zip_file_path = os.path.join(OUTPUT_ROOT_DIR, user["email"], "jobs", job_id, job_id + ".zip")
-        if not os.path.exists(zip_file_path):
-            return JSONResponse( status_code=status.HTTP_404_NOT_FOUND, content={"message": "Job zip file not found, please check the job id or wait for the job to complete"} )
-
-        return FileResponse(zip_file_path, media_type="application/zip", filename=job_id + ".zip")
-
     except Exception as exc_info:
         logging.error(exc_info)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
@@ -258,9 +244,11 @@ def update_proxies(request: Request, user: dict=Depends(get_user_token),
         if file:
             # read file
             content = file.file.read()
+            if isinstance(content, bytes):
+                content = content.decode("utf-8")
             proxies = json.loads(content)
-            if not isinstance(proxies, list):
-                return JSONResponse( status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Invalid file format, please upload a json file"} )
+            if (not isinstance(proxies, list)) or (not all(isinstance(proxy, str) for proxy in proxies)):
+                return JSONResponse( status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Invalid file format, please upload a proper json file, with list of proxies as strings"} )
 
         elif proxies:
             proxies = proxies[0].split(",")
@@ -413,6 +401,25 @@ def set_webhook_notification(request: Request, url: str, user: dict=Depends(get_
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
+@app.delete("/notification/webhook", response_class=JSONResponse, tags=["Notification"], summary="Delete webhook url for notifications")
+def delete_webhook_notification(request: Request, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to delete webhooks for notifications of the job by the user
+    """
+    try:
+        configured_correctly = NotificationWebhook(webhook_url="", data={}, email=user["email"]).delete_webhook_url_db()
+        if isinstance(configured_correctly, Error):
+            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": configured_correctly.message} )
+
+        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Webhook url deleted successfully"} )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
+
+
+
+
 
 @app.get("/sitemap", response_class=JSONResponse, tags=["Sitemap"], summary="Sitemap")
 def sitemap(request: Request, site_url: str) -> JSONResponse:
@@ -429,45 +436,9 @@ def sitemap(request: Request, site_url: str) -> JSONResponse:
 
 
 # 25-30% usage for workers of 30 parallel count
-# notification system, after job is completed, send email to the user or a webhook
 # buy more points, or pay as you go option
-# charts for the user - points, jobs, proxies, etc
 # firebase bkend, need to add Access Token Generator endpoint
 # add stripe payment gateway, unique payment link generator for each user how ? frontend ?
-
-
-
-# DB tables
-## users
-    # email - user email (primary key) - string
-    # uid - user id - string
-    # points - user points - integer
-    # plan - user plan - string
-    # parallel_count - scraper parallel count - integer
-    # config - user config - TEXT   # a json string
-
-## jobs
-    # job_id - job id (primary key) - string
-    # user_email - user email (foreign key) - string
-    # status - job status - string
-    # urls - job urls - TEXT
-    # proxies - job proxies - TEXT
-    # created_at - job created at - datetime
-    # parse_text - job parse text - boolean
-    # parallel_count - job parallel count - integer
-    # urls_scraped - job urls scraped - TEXT    # remove
-    # urls_failed - job urls failed - TEXT
-    # proxies_used - job proxies used - TEXT    # remove
-    # proxies_failed - job proxies failed - TEXT
-    # points_used - job points used - integer
-    # zip_file_path - job zip file path - string
-    # file_hash - job file hash - string md5
-
-## logs
-    # log_id - log id (primary key) - string
-    # user_email - user email (foreign key) - string
-    # log - log - TEXT
-    # created_at - log created at - datetime
 
 
 

@@ -1,7 +1,7 @@
 import concurrent.futures
 from src.utils.base.libraries import logging, cloudscraper, requests, os, threading, json, datetime, urllib
 from src.utils.base.basic import Error
-from src.utils.base.constants import LIST_OF_SKIP_CODES, OUTPUT_ROOT_DIR
+from src.utils.base.constants import LIST_OF_SKIP_CODES, OUTPUT_ROOT_DIR, SELF_SERVER_ROOT_URL
 from src.scraping.parsing import parse_html
 from src.utils.user.postgresql import UserPostgreSQLCRUD, JobPostgreSQLCRUD
 from src.profiles.main import JobProfile
@@ -212,8 +212,8 @@ class ProcessJob:
         formatted_time = current_time.strftime("%Y%m%d%H%M%S")
         # Convert the string to a unique string
         self.job_id = self._string_connvert(formatted_time)
-        os.makedirs(os.path.join(OUTPUT_ROOT_DIR, self.user["email"], "jobs", self.job_id), exist_ok=True)
-        self.job_folder_path = os.path.join(OUTPUT_ROOT_DIR, self.user["email"], "jobs", self.job_id)
+        os.makedirs(os.path.join(OUTPUT_ROOT_DIR, self.user["user_id"], "jobs", self.job_id), exist_ok=True)
+        self.job_folder_path = os.path.join(OUTPUT_ROOT_DIR, self.user["user_id"], "jobs", self.job_id)
 
     def _has_file_extension(self, url: str):
         """Check if the given URL has a file extension"""
@@ -387,10 +387,17 @@ class ProcessJob:
         self._save_logs("Failed the job with message: " + message)
         return True
     
+    def _generate_url(self):
+        """Generate the URL for the file"""
+        create_path = os.path.join(self.user['user_id'], "jobs", self.job_id, self.job_id + ".zip")
+        url = f"{SELF_SERVER_ROOT_URL}/download/{create_path}"
+        return url
+
     def update_job_completed(self, zip_file_path, zip_file_hash):
         """Update the process as completed"""
         self._save_logs("Updating the job as completed in the database and config file")
-        self.jobDB.update(self.user["email"] + '|' + self.job_id, {"status": "completed"})
+        file_url_link = self._generate_url()
+        self.jobDB.update(self.user["email"] + '|' + self.job_id, {"status": "completed", "zip_file_url": file_url_link})
 
         config_data = {}
         with open(os.path.join(self.job_folder_path, "config.json"), "r") as f:
@@ -403,5 +410,6 @@ class ProcessJob:
             json.dump(config_data, f, indent=4)
 
         self._save_logs("Job completed successfully!")
-        return True
+
+        return {"job_id": self.job_id, "status": "completed", "zip_file_url": file_url_link, "md5_hash": zip_file_hash}
 

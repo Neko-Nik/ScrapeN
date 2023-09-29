@@ -33,7 +33,7 @@ class ProxyValidator:
 class Proxies:
     def __init__(self, user):
         self.user = user
-        self.proxies_file = os.path.join(OUTPUT_ROOT_DIR, user['email'], 'proxies.json')
+        self.proxies_file = os.path.join(OUTPUT_ROOT_DIR, user['user_id'], 'proxies.json')
         self.lock = FileLock(self.proxies_file + ".lock")
         self.load_proxies()
 
@@ -87,7 +87,7 @@ class Proxies:
 
     def delete(self, delete_list: list=[]) -> bool:
         try:
-            if (delete_list != ['']) or (delete_list != []):
+            if delete_list != []:
                 with self.lock:
                     for proxy in delete_list:
                         if proxy in self.proxies:

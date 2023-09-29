@@ -8,16 +8,17 @@ from src.utils.user.handler import User
 class JobProfile:
     def __init__(self, user):
         self.user = user
+        self.profiles_dir = os.path.join(OUTPUT_ROOT_DIR, user["user_id"], "profiles")
         self.all_profiles = self.get_all_profiles()
 
     def get_all_profiles(self):
         try:
             all_job_profiles = {}
-            profiles_dir = os.path.join(OUTPUT_ROOT_DIR, self.user["email"], "profiles")
-            if os.path.exists(profiles_dir):
-                for file in os.listdir(profiles_dir):
+            os.makedirs(self.profiles_dir, exist_ok=True)
+            if os.path.exists(self.profiles_dir):
+                for file in os.listdir(self.profiles_dir):
                     if file.endswith(".json"):
-                        file_path = os.path.join(profiles_dir, file)
+                        file_path = os.path.join(self.profiles_dir, file)
                         with open(file_path, 'r') as f:
                             profile_data = json.load(f)
                             all_job_profiles[file.split(".")[0]] = profile_data
@@ -70,7 +71,7 @@ class JobProfile:
     def create(self, profile_name, profile_data):
         """Create a new profile"""
         try:
-            profile_file_path = os.path.join(OUTPUT_ROOT_DIR, self.user["email"], "profiles", f"{profile_name}.json")
+            profile_file_path = os.path.join(self.profiles_dir, f"{profile_name}.json")
             os.makedirs(os.path.dirname(profile_file_path), exist_ok=True)
             name_validator = self._validate_profile_name(profile_name)
 
@@ -126,7 +127,7 @@ class JobProfile:
     def update(self, profile_name, profile_data):
         """Update an existing profile"""
         try:
-            profile_file_path = os.path.join(OUTPUT_ROOT_DIR, self.user["email"], "profiles", f"{profile_name}.json")
+            profile_file_path = os.path.join(self.profiles_dir, f"{profile_name}.json")
             if not os.path.exists(profile_file_path):
                 return Error(code=404, message="Profile does not exists")
             
@@ -177,7 +178,7 @@ class JobProfile:
     def delete(self, profile_name):
         """Delete an existing profile"""
         try:
-            profile_file_path = os.path.join(OUTPUT_ROOT_DIR, self.user["email"], "profiles", f"{profile_name}.json")
+            profile_file_path = os.path.join(self.profiles_dir, f"{profile_name}.json")
             if not os.path.exists(profile_file_path):
                 return Error(code=404, message="Profile does not exists")
             # delete the profile file

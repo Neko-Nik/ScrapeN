@@ -33,6 +33,7 @@ NUMBER_OF_LOGS_TO_DISPLAY = int( log_config_data.get('NUMBER_OF_LOGS_TO_DISPLAY'
 ## scraping variables
 LIST_OF_SKIP_CODES = scraping_config_data.get('LIST_OF_SKIP_CODES', '404,500' ).split(',')
 OUTPUT_ROOT_DIR = scraping_config_data.get('OUTPUT_ROOT_DIR', 'output_files' )
+SELF_SERVER_ROOT_URL = scraping_config_data.get('SELF_SERVER_ROOT_URL', 'http://localhost:8083' )
 
 # Other constants
 

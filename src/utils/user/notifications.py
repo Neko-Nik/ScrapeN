@@ -16,6 +16,10 @@ class NotificationWebhook:
         self.data = data
         self.email = email
 
+    def delete_webhook_url_db(self):
+        configured_correctly = self.userDB.update_config(self.email, {"webhook_url": ""})
+        return configured_correctly
+
     def validate_webhook_url(self):
         # Check if the webhook_url is a valid URL
         if not validators.url(self.webhook_url):

@@ -14,6 +14,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import uvicorn
 from typing import Optional
+from fastapi.staticfiles import StaticFiles
 
 
 

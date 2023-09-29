@@ -43,6 +43,7 @@ class JobDB(Base):
     created_at = Column(String(255), nullable=False)    # When the job was created
     job_name = Column(String(255), nullable=True)       # User can add a name to the job if needed
     job_description = Column(TEXT, nullable=True)       # User can add a description to the job if needed
+    zip_file_url = Column(TEXT, nullable=True, default="Still processing")  # The URL of the zip file, if the job is completed
 
     user = relationship("UserDB", back_populates="jobs")
 
@@ -157,7 +158,7 @@ class JobPostgreSQLCRUD:
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
-    def create(self, job_uid, email, status, profile_name, created_at, job_name="", job_description="") -> bool:
+    def create(self, job_uid, email, status, profile_name, created_at, job_name="", job_description="", zip_file_url=""):
         try:
             session = self.Session()
             process = JobDB(
@@ -167,7 +168,8 @@ class JobPostgreSQLCRUD:
                 profile_name=profile_name,
                 created_at=created_at,
                 job_name=job_name,
-                job_description=job_description
+                job_description=job_description,
+                zip_file_url=zip_file_url
             )
             session.add(process)
             session.commit()
@@ -189,7 +191,8 @@ class JobPostgreSQLCRUD:
                         "status": job.status,
                         "created_at": job.created_at,
                         "job_name": job.job_name,
-                        "job_description": job.job_description
+                        "job_description": job.job_description,
+                        "zip_file_url": job.zip_file_url
                     }
             else:
                 jobs = session.query(JobDB).all()
@@ -199,7 +202,8 @@ class JobPostgreSQLCRUD:
                     "status": job.status,
                     "created_at": job.created_at,
                     "job_name": job.job_name,
-                    "job_description": job.job_description
+                    "job_description": job.job_description,
+                    "zip_file_url": job.zip_file_url
                 } for job in jobs]
 
         except SQLAlchemyError as e:
@@ -250,7 +254,8 @@ class JobPostgreSQLCRUD:
                 "status": job.status,
                 "created_at": job.created_at,
                 "job_name": job.job_name,
-                "job_description": job.job_description
+                "job_description": job.job_description,
+                "zip_file_url": job.zip_file_url
             } for job in jobs]
         except SQLAlchemyError as e:
             logging.error(f"Error while filtering job by email: {e}")
