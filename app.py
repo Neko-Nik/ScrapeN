@@ -37,6 +37,7 @@ from src.utils.user.postgresql import JobPostgreSQLCRUD
 from src.utils.user.stripe_manager import StripeManager
 from src.proxies.main import ProxyValidator, Proxies
 from src.profiles.main import JobProfile
+from src.utils.user.notifications import NotificationWebhook
 
 
 # Initialization
@@ -393,6 +394,23 @@ def delete_job_profile(request: Request, profile_name: str, user: dict=Depends(g
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
+@app.put("/notification/webhook", response_class=JSONResponse, tags=["Notification"], summary="Set webhook url for notifications")
+def set_webhook_notification(request: Request, url: str, user: dict=Depends(get_user_token)) -> JSONResponse:
+    """
+    This endpoint is used to set webhooks for notifications of the job by the user
+    When the job is completed, the user will get a notification on the given url, we will send the job id and status,
+    basically we will send the same response as the job status endpoint
+    """
+    try:
+        configured_correctly = NotificationWebhook(webhook_url=url, data={}, email=user["email"]).set_webhook_url_db()
+        if isinstance(configured_correctly, Error):
+            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": configured_correctly.message} )
+
+        return JSONResponse( status_code=status.HTTP_200_OK, content={"message": "Webhook url set successfully"} )
+
+    except Exception as exc_info:
+        logging.error(exc_info)
+        raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
 

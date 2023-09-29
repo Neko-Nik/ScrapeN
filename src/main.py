@@ -1,9 +1,10 @@
 """All the main function that will be executed when the API is called"""
 
-from src.utils.base.libraries import logging, os
+from src.utils.base.libraries import json, os
 from src.sitemap.main import get_urls_from_xml
 from src.scraping.main import WebScraper, ProcessJob
 from src.scraping.base_functions import zip_folder_and_verify
+from src.utils.user.notifications import NotificationWebhook, NotificationsEmail
 
 
 def render_sitemap(url: str) -> dict:
@@ -49,4 +50,20 @@ def render_scrape(process_job_obj: ProcessJob) -> None:
 
     process_job_obj.update_job_completed(**{"zip_file_path": file_path, "zip_file_hash": file_hash})
 
-    # Send email to the user or call the webhook
+    config = json.loads(process_job_obj.user_db_data.get("config", "{}"))
+    send_webhook_url_notification = config.get("webhook_url", False)
+    send_email_notification = config.get("email_notification", False)   # TODO: Not implemented yet
+
+    if send_email_notification:
+        process_job_obj._save_logs(f"Sending email to the user")
+        NotificationsEmail().send_email(email=process_job_obj.user_db_data["email"], subject="Job Completed", body="Job Completed")
+        process_job_obj._save_logs(f"Email sent to the user")
+
+    if send_webhook_url_notification:
+        process_job_obj._save_logs(f"Calling the webhook")
+        data = {"job_id": job_id, "status": "completed"}
+        NotificationWebhook(webhook_url=send_webhook_url_notification, data=data, email=process_job_obj.user_db_data["email"]).call_webhook()
+        process_job_obj._save_logs(f"Webhook called completed")
+
+    return None
+
