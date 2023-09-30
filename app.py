@@ -28,7 +28,8 @@ from src.utils.base.libraries import (
     StaticFiles
 )
 from src.utils.base.constants import NUMBER_OF_LOGS_TO_DISPLAY, OUTPUT_ROOT_DIR
-from src.main import render_sitemap, render_scrape
+from src.main import render_scrape
+from src.sitemap.main import Sitemap
 from src.utils.user.auth import get_user_token
 from src.utils.user.handler import User
 from src.scraping.main import ProcessJob
@@ -420,20 +421,20 @@ def delete_webhook_notification(request: Request, user: dict=Depends(get_user_to
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
-
-
-
-@app.get("/sitemap", response_class=JSONResponse, tags=["Sitemap"], summary="Sitemap")
-def sitemap(request: Request, site_url: str) -> JSONResponse:
+@app.post("/scrape/sitemap", response_class=JSONResponse, tags=["Scrape"], summary="Scrape sitemap of the given xml sitemap urls")
+def xml_sitemap_scraper(request: Request, website_urls: list, do_nested: bool=False, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
-    This endpoint is used to render_sitemap
+    This endpoint is used to scrape sitemap of the given xml sitemap urls
     """
     try:
-        resp = render_sitemap(site_url)
-        return JSONResponse( status_code=status.HTTP_200_OK, content=resp )
+        sitemap_obj = Sitemap(user=user, xml_urls=website_urls, do_nested=do_nested)
+        urls = sitemap_obj.run()
+        if isinstance(urls, Error):
+            return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": urls.message} )
+        return JSONResponse( status_code=status.HTTP_200_OK, content=urls )
 
     except Exception as exc_info:
-        logging.error(exc_info)
+        logging.error(exc_info, exc_info=True)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 

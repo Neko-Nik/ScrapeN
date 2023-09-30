@@ -1,23 +1,9 @@
 """All the main function that will be executed when the API is called"""
 
 from src.utils.base.libraries import json, os
-from src.sitemap.main import get_urls_from_xml
 from src.scraping.main import WebScraper, ProcessJob
 from src.scraping.base_functions import zip_folder_and_verify
 from src.utils.user.notifications import NotificationWebhook, NotificationsEmail
-
-
-def render_sitemap(url: str) -> dict:
-
-    urls_data = get_urls_from_xml(url)
-    
-    resp = {
-        "sitemap_url": url,
-        "total_urls": len(urls_data),
-        "urls": urls_data
-    }
-
-    return resp
 
 
 def render_scrape(process_job_obj: ProcessJob) -> None:
