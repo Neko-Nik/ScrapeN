@@ -410,6 +410,7 @@ def delete_webhook_notification(request: Request, user: dict=Depends(get_user_to
     This endpoint is used to delete webhooks for notifications of the job by the user
     """
     try:
+        print(user)
         configured_correctly = NotificationWebhook(webhook_url="", data={}, email=user["email"]).delete_webhook_url_db()
         if isinstance(configured_correctly, Error):
             return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": configured_correctly.message} )
@@ -422,7 +423,7 @@ def delete_webhook_notification(request: Request, user: dict=Depends(get_user_to
 
 
 @app.post("/scrape/sitemap", response_class=JSONResponse, tags=["Scrape"], summary="Scrape sitemap of the given xml sitemap urls")
-def xml_sitemap_scraper(request: Request, website_urls: list, do_nested: bool=False, user: dict=Depends(get_user_token)) -> JSONResponse:
+async def xml_sitemap_scraper(request: Request, website_urls: list, do_nested: bool=False, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
     This endpoint is used to scrape sitemap of the given xml sitemap urls
     """

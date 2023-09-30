@@ -12,7 +12,6 @@ class NotificationWebhook:
         self.webhook_url = webhook_url
         self.is_valid = False
         self.error = None
-        self.validate_webhook_url()
         self.data = data
         self.email = email
 
@@ -46,6 +45,7 @@ class NotificationWebhook:
 
     @retry(Exception, total_tries=3, initial_wait=1, backoff_factor=2 )
     def call_webhook(self):
+        self.validate_webhook_url()
         resp = requests.post(self.webhook_url, json=self.data)
         if resp.status_code != 200:
             raise Exception(f"Webhook call failed with status code {resp.status_code}")
