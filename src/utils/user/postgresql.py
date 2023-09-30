@@ -15,6 +15,7 @@ from src.utils.base.libraries import (
     logging
 )
 from src.utils.base.basic import retry, Error
+from src.utils.base.constants import POSTGRES_DB_URL
 
 
 Base = declarative_base()
@@ -52,7 +53,7 @@ class JobDB(Base):
 @retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2 )
 class UserPostgreSQLCRUD:
     def __init__(self):
-        db_url = "postgresql://nikhil:neko@192.168.1.99:5445/nikhil"    # Kuro Neko Server
+        db_url = POSTGRES_DB_URL
         self.engine = create_engine(db_url, poolclass=QueuePool, pool_size=10, max_overflow=20)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
@@ -153,7 +154,7 @@ class UserPostgreSQLCRUD:
 @retry(Exception, total_tries=5, initial_wait=1, backoff_factor=2)
 class JobPostgreSQLCRUD:
     def __init__(self):
-        db_url = "postgresql://nikhil:neko@192.168.1.99:5445/nikhil"    # Kuro Neko Server
+        db_url = POSTGRES_DB_URL
         self.engine = create_engine(db_url, poolclass=QueuePool, pool_size=10, max_overflow=20)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)

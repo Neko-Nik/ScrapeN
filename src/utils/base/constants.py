@@ -11,6 +11,7 @@ dotenv.load_dotenv()
 # environment variables
 STRIPE_API_KEY = os.getenv("STRIPE_API_KEY")
 STRIPE_WEBHOOK_SIGNING_SECRET = os.getenv("STRIPE_WEBHOOK_SIGNING_SECRET")
+POSTGRES_DB_URL = os.getenv("POSTGRES_DB_URL")
 
 
 # config.cfg file setup
