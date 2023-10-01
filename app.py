@@ -274,14 +274,13 @@ def update_proxies(request: Request, user: dict=Depends(get_user_token),
 
 
 @app.delete("/proxies", response_class=JSONResponse, tags=["Proxies"], summary="Delete user proxies list")
-def delete_proxies(request: Request, user: dict=Depends(get_user_token), proxies: Optional[list] = Form(None)) -> JSONResponse:
+def delete_proxies(request: Request, user: dict=Depends(get_user_token), proxies: Optional[list] = []) -> JSONResponse:
     """
     This endpoint is used to delete user proxies list
     """
     try:
         proxies_obj = Proxies(user)
         if proxies:
-            proxies = proxies[0].split(",")
             proxies_obj.delete(delete_list=proxies)
             message = "Proxies that are given are deleted successfully, if they exist"
         else:
