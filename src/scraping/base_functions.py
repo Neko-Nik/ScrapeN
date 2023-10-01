@@ -1,6 +1,31 @@
 from src.utils.base.libraries import logging, os, zipfile, shutil, hashlib
 
 
+def clean_job_data(job_data: list | dict) -> list | dict:
+    if isinstance(job_data, list):
+        new_list = []
+        for each_job in job_data:
+            new_list.append({
+                "job_id": each_job["job_uid"].split("|")[1],
+                "name": each_job["job_name"],
+                "description": each_job["job_description"],
+                "status": each_job["status"],
+                "created_at": each_job["created_at"],
+                "zip_file_url": each_job["zip_file_url"]
+            })
+        job_data = new_list
+
+    if isinstance(job_data, dict):
+        job_data = {
+            "job_id": job_data["job_uid"].split("|")[1],
+            "name": job_data["job_name"],
+            "description": job_data["job_description"],
+            "status": job_data["status"],
+            "created_at": job_data["created_at"],
+            "zip_file_url": job_data["zip_file_url"]
+        }
+    return job_data
+
 
 def zip_folder_and_verify(folder_path):
     # Check if the folder exists

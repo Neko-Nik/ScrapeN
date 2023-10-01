@@ -33,6 +33,7 @@ from src.sitemap.main import Sitemap
 from src.utils.user.auth import get_user_token
 from src.utils.user.handler import User
 from src.scraping.main import ProcessJob
+from src.scraping.base_functions import clean_job_data
 from src.utils.base.basic import Error
 from src.utils.user.postgresql import JobPostgreSQLCRUD
 from src.utils.user.stripe_manager import StripeManager
@@ -193,6 +194,8 @@ def job_status(request: Request, job_id: str=None, user: dict=Depends(get_user_t
 
         if isinstance(job_data, Error):
             return JSONResponse( status_code=status.HTTP_412_PRECONDITION_FAILED, content={"message": job_data.message} )
+
+        job_data = clean_job_data(job_data=job_data)
 
         return JSONResponse( status_code=status.HTTP_200_OK, content=job_data )
     except Exception as exc_info:
