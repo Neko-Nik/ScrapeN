@@ -130,9 +130,6 @@ def get_user_data(request: Request, user: dict=Depends(get_user_token)) -> JSONR
         if isinstance(user_db_data, Error):
             raise All_Exceptions( user_db_data.message, user_db_data.code )
 
-        if "config" in user_db_data:
-            del user_db_data["config"]
-
         return JSONResponse( status_code=status.HTTP_200_OK, content=user_db_data )
     except Exception as exc_info:
         logging.error(exc_info)
