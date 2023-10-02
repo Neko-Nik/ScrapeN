@@ -37,6 +37,7 @@ OUTPUT_ROOT_DIR = scraping_config_data.get('OUTPUT_ROOT_DIR', 'output_files' )
 SELF_SERVER_ROOT_URL = scraping_config_data.get('SELF_SERVER_ROOT_URL', 'http://localhost:8083' )
 
 # Other constants
+SAFETY_EXTENSIONS = ('.html', '.htm', '.adpx')
 
 ## Error messages
 ERROR_MESSAGES = {

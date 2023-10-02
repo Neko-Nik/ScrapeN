@@ -1,7 +1,7 @@
 import concurrent.futures
 from src.utils.base.libraries import logging, cloudscraper, requests, os, threading, json, datetime, urllib
 from src.utils.base.basic import Error
-from src.utils.base.constants import LIST_OF_SKIP_CODES, OUTPUT_ROOT_DIR, SELF_SERVER_ROOT_URL
+from src.utils.base.constants import LIST_OF_SKIP_CODES, OUTPUT_ROOT_DIR, SELF_SERVER_ROOT_URL, SAFETY_EXTENSIONS
 from src.scraping.parsing import parse_html
 from src.utils.user.postgresql import UserPostgreSQLCRUD, JobPostgreSQLCRUD
 from src.profiles.main import JobProfile
@@ -219,12 +219,13 @@ class ProcessJob:
         """Check if the given URL has a file extension"""
         parsed_url = urllib.parse.urlparse(url)
         path = parsed_url.path
-        # Split the path by "." and check if the last part has a file extension
-        parts = path.split(".")
-        if len(parts) > 1:
-            if not parts[-1] in ["html", "htm"]:
-                return True
-        return False
+        split_url = path.split('/')
+        split_url = list(filter(None, split_url))[-1] # clean the list
+        if "." not in split_url:
+            return False
+        if split_url.endswith(SAFETY_EXTENSIONS):
+            return False
+        return True
 
     def handle_file_based_urls(self):
         """Handle the file based URLs"""
