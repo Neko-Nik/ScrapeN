@@ -47,7 +47,7 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
     title="Neko Nik - ScrapeN API",
     description="This ScrapeN API is used to scrape data from the web",
-    version="1.7.7",
+    version="1.7.9",
     docs_url="/docs",
     redoc_url="/redoc",
     include_in_schema=True,
