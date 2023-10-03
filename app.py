@@ -210,7 +210,6 @@ def create_job(request: Request, background_tasks: BackgroundTasks, profile_name
     This endpoint is used to create a new job, n number of urls and proxies can be passed, even 1 url and 1 proxy can be passed
     """
     try:
-        logging.info(f"Job creation request received for {user['email']} with urls {urls} and type {type(urls)}")
         process_job_obj = ProcessJob(urls=urls, user=user, profile_name=profile_name, job_name=job_name, job_description=job_description)
         job_data = process_job_obj.run()
 

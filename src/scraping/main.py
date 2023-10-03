@@ -220,7 +220,10 @@ class ProcessJob:
         parsed_url = urllib.parse.urlparse(url)
         path = parsed_url.path
         split_url = path.split('/')
-        split_url = list(filter(None, split_url))[-1] # clean the list
+        split_url = list(filter(None, split_url))
+        if not split_url:
+            return False
+        split_url = split_url[-1]
         if "." not in split_url:
             return False
         if split_url.endswith(SAFETY_EXTENSIONS):
