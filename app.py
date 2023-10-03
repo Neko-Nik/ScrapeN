@@ -222,7 +222,7 @@ def create_job(request: Request, background_tasks: BackgroundTasks, profile_name
             return JSONResponse( status_code=status.HTTP_200_OK, content=job_data )
 
     except Exception as exc_info:
-        logging.error(exc_info)
+        logging.error(exc_info, exc_info=True)
         raise All_Exceptions( "Something went wrong", status.HTTP_500_INTERNAL_SERVER_ERROR )
 
 
