@@ -128,7 +128,8 @@ def run_single_js_scraper(config: list):
             chrome_args=config_init['args'].get('chrome_args', []),
             file_path=config_init['args']['file_path']
         )
-        return scraper.run(config_init[1:])
+        next_to_run = config[1:]
+        return scraper.run(next_to_run)
     except Exception as e:
         return {"Error": e}
 
