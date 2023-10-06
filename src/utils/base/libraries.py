@@ -38,6 +38,16 @@ import xml.etree.ElementTree as ET
 from filelock import FileLock
 
 
+# JS Scraping libraries
+from seleniumwire import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from threading import Lock
+from itertools import cycle
+
+
 # other libraries
 import json
 import re
