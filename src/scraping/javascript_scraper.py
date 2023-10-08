@@ -69,21 +69,21 @@ class JsWebScraper:
 
     def fetch_page(self, do_parse_html=False):
         file_name = self.url.replace('https://', '').replace('http://', '').replace('/', '_')
-        file_name = os.path.join(self.file_path, f'{file_name}.html')
+        file_path = os.path.join(self.file_path, f'{file_name}.json')
         original_url = f"<!-- Original URL: {self.url} -->"
         data = original_url + "\n" + self.page_source
         parsed_data = "No parsed data"
         if do_parse_html:
             parsed_data = parse_html(url=self.url , html_text=data , remove_header_footer=True)
-        to_save = {
+        data_to_save = {
             "raw": data,
             "parsed": parsed_data,
             "original_url": self.url,
             "status": "success"
         }
         with self.lock:
-            with open(file_name, 'w') as f:
-                f.write(json.dumps(to_save))
+            with open(file_path, 'w') as f:
+                f.write(json.dumps(data_to_save))
         return "success"
 
     def delay(self, delay_time):
@@ -224,6 +224,7 @@ class JsScraping:
             "urls_scraped": self.urls,
             "urls_failed": [],
             "proxies_used": self.proxies_list,
-            "proxies_failed": []
+            "proxies_failed": [],
+            "results": results
         }
 

@@ -366,6 +366,7 @@ class ProcessJob:
         config_data["urls_failed"] = scrape_results["urls_failed"]
         config_data["proxies_used"] = scrape_results["proxies_used"]
         config_data["proxies_failed"] = scrape_results["proxies_failed"]
+        config_data["results"] = scrape_results.get("results", {})
         config_data["points_used"] = points_used
         config_data["points_added"] = add_points
         config_data["points_remaining"] = new_points
