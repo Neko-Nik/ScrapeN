@@ -221,8 +221,8 @@ class JsScraping:
 
         # TODO: This is a fake result, need to update it
         return {
-            "urls_scraped": len(self.urls),
-            "urls_failed": len(self.urls) - len(results),
+            "urls_scraped": self.urls,
+            "urls_failed": [],
             "proxies_used": self.proxies_list,
             "proxies_failed": []
         }
