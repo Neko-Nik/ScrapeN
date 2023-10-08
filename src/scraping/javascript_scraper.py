@@ -72,9 +72,9 @@ class JsWebScraper:
         file_name = os.path.join(self.file_path, f'{file_name}.html')
         original_url = f"<!-- Original URL: {self.url} -->"
         data = original_url + "\n" + self.page_source
+        parsed_data = "No parsed data"
         if do_parse_html:
-            parsed_data = parse_html(data)
-        
+            parsed_data = parse_html(url=self.url , html_text=data , remove_header_footer=True)
         to_save = {
             "raw": data,
             "parsed": parsed_data,
