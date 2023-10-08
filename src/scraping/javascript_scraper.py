@@ -174,7 +174,7 @@ class JsScraping:
     def _parse_proxies(self):
         # parse the proxy list to make it suitable for the scraper
         for proxy in self.proxies:
-            ip, port, username, password = proxy
+            ip, port, username, password = proxy.split(':')
             self.proxies_list.append((ip, port, username, password))
 
     def _make_configs(self):
