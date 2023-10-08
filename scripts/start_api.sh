@@ -5,4 +5,4 @@
 cd /home/nikhil/Repositories/ScrapeN && source .venv/bin/activate
 
 #start the gpt api
-gunicorn --workers=3 --threads=3 --reload --bind 0.0.0.0:443 --timeout 2500 --keyfile=/home/nikhil/privkey.pem --certfile=/home/nikhil/fullchain.pem --reload --capture-output --error-logfile logs/error_log.txt --access-logfile logs/guicorn_log.txt -k uvicorn.workers.UvicornWorker app:app &
+gunicorn --workers=3 --threads=3 --reload --bind 0.0.0.0:443 --timeout 2500 --keyfile=/etc/letsencrypt/live/api.scrape-n.com/privkey.pem --certfile=/etc/letsencrypt/live/api.scrape-n.com/fullchain.pem --reload --capture-output --error-logfile logs/error_log.txt --access-logfile logs/guicorn_log.txt -k uvicorn.workers.UvicornWorker app:app &

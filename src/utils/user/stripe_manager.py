@@ -93,8 +93,8 @@ class StripeManager:
                     "plan": plan_id
                 }]
             },
-            success_url="https://scrape.nekonik.com/dashboard",
-            cancel_url="https://scrape.nekonik.com/dashboard",
+            success_url="https://www.scrape-n.com/dashboard",
+            cancel_url="https://www.scrape-n.com/dashboard",
         )
         return checkout_session.url
         
