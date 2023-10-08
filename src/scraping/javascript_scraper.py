@@ -67,12 +67,12 @@ class JsWebScraper:
             }
         }
 
-    def fetch_page(self, parse_html=False):
+    def fetch_page(self, do_parse_html=False):
         file_name = self.url.replace('https://', '').replace('http://', '').replace('/', '_')
         file_name = os.path.join(self.file_path, f'{file_name}.html')
         original_url = f"<!-- Original URL: {self.url} -->"
         data = original_url + "\n" + self.page_source
-        if parse_html:
+        if do_parse_html:
             parsed_data = parse_html(data)
         
         to_save = {
@@ -191,7 +191,7 @@ class JsScraping:
             {
                 "method": "fetch_page",
                 "args": {
-                    "parse_html": self.do_parse_html
+                    "do_parse_html": self.do_parse_html
                 }
             },
             {
