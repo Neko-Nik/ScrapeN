@@ -124,7 +124,7 @@ class WebScraper:
 
 
 class ProcessJob:
-    def __init__(self, urls: list, user: dict, profile_name: str, job_name: str, job_description: str=""):
+    def __init__(self, urls: list, user: dict, profile_name: str, job_name: str, job_description: str="", do_js_scraping: bool=False):
         self.jobDB = JobPostgreSQLCRUD()
         self.userDB = UserPostgreSQLCRUD()
         self.jobProfile = JobProfile(user=user)
@@ -132,6 +132,7 @@ class ProcessJob:
         self.logs = []
         self.user = user
         self.urls = urls
+        self.do_js_rendering = do_js_scraping
         self.profile_name = profile_name
         self.job_name = job_name
         self.job_description = job_description
@@ -238,7 +239,12 @@ class ProcessJob:
 
     def reduce_points(self):
         """Reduce the points from the user"""
-        initial_points = len(self.urls)
+        if self.do_js_rendering:
+            # If its a js rendering job then each url costs around 3 points
+            initial_points = len(self.urls) * 3
+        else:
+            # If its a normal job then one url costs one point only
+            initial_points = len(self.urls)
         current_points = self.user_db_data.get("points", 0)
 
         if self.user_db_data:
@@ -285,12 +291,14 @@ class ProcessJob:
         if not self.urls:
             return Error(code=412, message="No URLs left after removing the file based URLs")
 
+        # check if the user has enough parallel units to scrape the given URLs
         has_enough_parallel_units = self.reduce_parallel_units()
         if not has_enough_parallel_units:
             return Error(code=412, message=f"Parallel count {self.parallel} is greater than \
                          allocated parallel count {self.allocated_parallel} or You don't have enough \
                             parallel units to scrape the given URLs with the given profile")
 
+        # check if the user has enough points to scrape the given URLs
         has_enough_points = self.reduce_points()
         if not has_enough_points:
             return Error(code=412, message="Not enough points to scrape the given URLs")

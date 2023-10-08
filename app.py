@@ -205,12 +205,13 @@ def job_status(request: Request, job_id: str=None, user: dict=Depends(get_user_t
 
 @app.post("/job", response_class=JSONResponse, tags=["Job"], summary="Create a new job")
 @limiter.limit("1/2 second")
-def create_job(request: Request, background_tasks: BackgroundTasks, profile_name: str, urls: list, job_name: str=None, job_description: str=None, user: dict=Depends(get_user_token)) -> JSONResponse:
+def create_job(request: Request, background_tasks: BackgroundTasks, profile_name: str, urls: list, do_js_scraping: bool=False,
+                job_name: str=None, job_description: str=None, user: dict=Depends(get_user_token)) -> JSONResponse:
     """
     This endpoint is used to create a new job, n number of urls and proxies can be passed, even 1 url and 1 proxy can be passed
     """
     try:
-        process_job_obj = ProcessJob(urls=urls, user=user, profile_name=profile_name, job_name=job_name, job_description=job_description)
+        process_job_obj = ProcessJob(urls=urls, user=user, profile_name=profile_name, job_name=job_name, job_description=job_description, do_js_scraping=do_js_scraping)
         job_data = process_job_obj.run()
 
         if isinstance(job_data, Error):

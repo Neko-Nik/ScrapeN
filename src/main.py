@@ -2,6 +2,7 @@
 
 from src.utils.base.libraries import json, os
 from src.scraping.main import WebScraper, ProcessJob
+from src.scraping.javascript_scraper import JsScraping
 from src.scraping.base_functions import zip_folder_and_verify
 from src.utils.user.notifications import NotificationWebhook, NotificationsEmail
 
@@ -12,6 +13,7 @@ def render_scrape(process_job_obj: ProcessJob) -> None:
     # process_job_obj use this to get all the data
     job_id = process_job_obj.job_id
     urls = process_job_obj.urls
+    do_js_rendering = process_job_obj.do_js_rendering
     proxies = process_job_obj.proxies
     num_parallel_workers = process_job_obj.parallel
     do_parsing = process_job_obj.do_parsing
@@ -21,8 +23,11 @@ def render_scrape(process_job_obj: ProcessJob) -> None:
 
     # Start the scraping process
     process_job_obj._save_logs(f"Scraping {len(urls)} urls with {len(proxies)} proxies")
-    scraper_obj = WebScraper(num_workers=num_parallel_workers, do_parse_html=do_parsing, output_dir=output_dir_for_urls_processed)
-    scrape_results = scraper_obj.scrape_urls(urls=urls, proxies_list=proxies)
+    if do_js_rendering:
+        scrape_results = JsScraping(urls=urls, proxies=proxies, do_parse_html=do_parsing, max_workers=num_parallel_workers, output_dir=output_dir_for_urls_processed).run()
+    else:
+        scraper_obj = WebScraper(num_workers=num_parallel_workers, do_parse_html=do_parsing, output_dir=output_dir_for_urls_processed)
+        scrape_results = scraper_obj.scrape_urls(urls=urls, proxies_list=proxies)
     process_job_obj._save_logs(f"Scraping completed!")
 
     # Update the job object with the scrape results and set status as zippping

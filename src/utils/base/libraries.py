@@ -36,6 +36,7 @@ from bs4 import BeautifulSoup, NavigableString
 from urllib.parse import urljoin
 import xml.etree.ElementTree as ET
 from filelock import FileLock
+import html2text
 
 
 # JS Scraping libraries

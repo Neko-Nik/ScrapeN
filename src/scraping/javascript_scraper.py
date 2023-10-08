@@ -1,4 +1,5 @@
-from src.utils.base.libraries import webdriver, Options, os, WebDriverWait, EC, By, time, Lock, cycle, logging
+from src.utils.base.libraries import webdriver, Options, os, WebDriverWait, EC, By, time, Lock, cycle, json
+from src.scraping.parsing import parse_html
 import concurrent.futures
 
 
@@ -66,16 +67,25 @@ class JsWebScraper:
             }
         }
 
-    def fetch_page(self):
+    def fetch_page(self, parse_html=False):
         file_name = self.url.replace('https://', '').replace('http://', '').replace('/', '_')
         file_name = os.path.join(self.file_path, f'{file_name}.html')
         original_url = f"<!-- Original URL: {self.url} -->"
         data = original_url + "\n" + self.page_source
+        if parse_html:
+            parsed_data = parse_html(data)
+        
+        to_save = {
+            "raw": data,
+            "parsed": parsed_data,
+            "original_url": self.url,
+            "status": "success"
+        }
         with self.lock:
             with open(file_name, 'w') as f:
-                f.write(data)
-        return {"file_path": file_name}
-    
+                f.write(json.dumps(to_save))
+        return "success"
+
     def delay(self, delay_time):
         # max delay time is 10 seconds
         delay_time = min(delay_time, 10)
@@ -151,4 +161,69 @@ def run_parallel_scraping(all_configs: list, max_workers: int=20):
 
     return results
 
+
+class JsScraping:
+    def __init__(self, urls: list, proxies: list, do_parse_html: bool, max_workers: int, output_dir: str):
+        self.urls = urls
+        self.proxies = proxies
+        self.do_parse_html = do_parse_html
+        self.max_workers = max_workers
+        self.output_dir = output_dir
+        self.proxies_list = []  # Prossible proxies to use
+
+    def _parse_proxies(self):
+        # parse the proxy list to make it suitable for the scraper
+        for proxy in self.proxies:
+            ip, port, username, password = proxy
+            self.proxies_list.append((ip, port, username, password))
+
+    def _make_configs(self):
+        make_config = lambda url: [
+            {
+                "method": "__init__",
+                "args": {
+                    "url": url,
+                    "proxy_list": self.proxies_list,
+                    "chrome_args": ['--disable-images'],
+                    "file_path": self.output_dir
+                }
+            },
+            {
+                "method": "fetch_page",
+                "args": {
+                    "parse_html": self.do_parse_html
+                }
+            },
+            {
+                "method": "quit",
+                "args": {}
+            }
+        ]
+
+        # Use the lambda function to generate configurations for each URL
+        configs = [make_config(url) for url in self.urls]
+
+        return configs
+
+    
+    def scrape(self):
+        self._parse_proxies()
+        configs = self._make_configs()
+        results = run_parallel_scraping(configs, max_workers=self.max_workers)
+        return results
+
+    def run(self):
+        """Run the JS scraping for the given URLs and proxies"""
+        self._parse_proxies()
+        configs = self._make_configs()
+
+        results = run_parallel_scraping(configs, max_workers=self.max_workers)
+
+        # TODO: This is a fake result, need to update it
+        return {
+            "urls_scraped": len(self.urls),
+            "urls_failed": len(self.urls) - len(results),
+            "proxies_used": self.proxies_list,
+            "proxies_failed": []
+        }
 

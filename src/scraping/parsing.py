@@ -1,4 +1,4 @@
-from src.utils.base.libraries import re, urljoin, NavigableString, BeautifulSoup
+from src.utils.base.libraries import re, urljoin, NavigableString, BeautifulSoup, html2text
 
 
 
@@ -103,81 +103,76 @@ def remove_cookie_js_text(page_text):
     return page_text_cleaned
 
 
+def convert_html_to_markdown(html):
+    try:
+        h = html2text.HTML2Text()
+        h.ignore_links = False
+        return h.handle(html)
+    except Exception as e:
+        return "Sorry, Not able to parse it!"
+
+
 def parse_html( url , html_text , remove_header_footer = True ):
+    # Remove all HTML comments
+    cleaned_html_text = re.sub(r'<!--.*?-->', '', html_text, flags=re.DOTALL)
+   
+    # Remove all content within <script> tags
+    cleaned_html_text = re.sub(r'<script.*?>.*?</script>', '', cleaned_html_text, flags=re.DOTALL)
+   
+    # Remove all content within <head> tags
+    cleaned_html_text = re.sub(r'<head.*?>.*?</head>', '', cleaned_html_text, flags=re.DOTALL)
 
-    soup = BeautifulSoup( html_text, 'html.parser' )
+    soup = BeautifulSoup(cleaned_html_text, 'html.parser')
+
     # Remove script and style tags
-    for script in soup(["script", "style"]):
-        script.extract()
+    for script in soup(['script', 'style']):
+        script.decompose()
+   
+    # Remove head tag and its content
+    head_tag = soup.find("head")
+    if head_tag:
+        head_tag.decompose()
 
+    # Remove specific messages like cookie notices and JavaScript messages
+    for element in soup.find_all(text=re.compile('cookies|JavaScript', re.IGNORECASE)):
+        parent_element = getattr(element, 'parent', None)
+        if parent_element:
+            parent_element.extract()
+
+    # Remove elements that have certain keywords in their class or id attributes
+    keywords_to_remove = ['cookie', 'footer', 'header']
+    for element in soup.find_all(True):
+        try:
+            class_attr = ' '.join(element.attrs.get('class', []))
+            id_attr = element.attrs.get('id', '')
+            if any(keyword in class_attr for keyword in keywords_to_remove) or any(keyword in id_attr for keyword in keywords_to_remove):
+                element.decompose()
+        except AttributeError:
+            continue
+           
     if remove_header_footer:
-        # Find the header tag or class in the HTML document
-        header = soup.find('header')  # replace with the actual header tag or class
-        # Find the footer tag or class in the HTML document
-        footer = soup.find('footer')  # replace with the actual footer tag or class
-        # Remove the header and footer tags or classes from the parsed data
-        if header:
-            header.extract()
-        if footer:
-            footer.extract()
+        try:
+            # Remove header and footer based on known tags, classes or IDs
+            for tag in soup.find_all(['header', 'footer']):
+                tag.extract()
 
-    # Remove elements containing JavaScript message
-    js_message = soup.find_all(string="If you're seeing this message, that means JavaScript has been disabled on your browser , please enable JS to make this app work")
-    for elem in js_message:
-        elem.extract()
-
-    # Remove elements containing "Privacy Statement" with cookies link
-    # Define keywords related to cookie-policy
-    cookie_keywords = ['cookie', 'cookie-policy']
-
-    # Find and remove elements containing the keywords
-    for keyword in cookie_keywords:
-        elements_to_remove = soup.find_all(lambda tag: contains_cookie_keyword(tag, keyword))
-        for elem in elements_to_remove:
-            elem.extract()
-
+            # Additional logic to remove headers and footers if they couldn't be found by 'find'
+            for element in soup.find_all(['div', 'nav', 'section']):
+                class_attr = getattr(element, 'attrs', {}).get('class', [])
+                id_attr = getattr(element, 'attrs', {}).get('id', '')
+               
+                if 'header' in class_attr or 'header' in id_attr:
+                    element.extract()
+                if 'footer' in class_attr or 'footer' in id_attr:
+                    element.extract()
+        except:
+            pass
 
     # Replace 'a' tags with their URLs
-    url_data = []
-    already_added_links = []
-    #print(f"all links: {soup.find_all('a')}")
     for link in soup.find_all('a'):
-        if link.has_attr('href') and not link['href'].startswith("#"): #and link['href'].startswith(('http', 'https')):
+        if link.has_attr('href') and not link['href'].startswith("#"):
             link_url = urljoin(url, link['href'])
-            link_old_text = link.text
-            link_string = f"[{link.text}]{link_url}"
-            if link_string not in already_added_links:
-                link.string = link_string
-                already_added_links.append(link_string)
-
-                #find headers and other data for metdata
-                header = link.find_previous('h1') or link.find_previous('h2') or link.find_previous('h3') or link.find_previous('h4') or link.find_previous('h5') or link.find_previous('h6')
-                if header:
-                    header_text = header.text.strip()
-                else:
-                    header_text = None
-                    
-                url_data.append({'url': link_url, 'text': link_old_text  , 'header': header_text})
-
-
-    # Remove JavaScript and CSS code
-    clean_text = re.sub(r"(?is)<(script|style).*?>.*?(</\1>)", "", str(soup))
-    # Remove HTML tags, except <hsep>
-    clean_text = re.sub(r"(?s)<(?!hsep).*?>", " ", clean_text)
-    # Remove extra whitespace
-    clean_text = re.sub(r"\s+", " ", clean_text)
-    #remove text related to cookies
-    clean_text = remove_cookie_js_text(page_text = clean_text )
-
-    #logging.debug(f"Extracted text from: {url}")
-
-    #add the headers text if the text under header section is more 
-    header_extractor = HeaderExtractor( soup = soup )
-    header_text_list = header_extractor.process_headers()
-    if header_text_list:
-        extra_header_text = ". ".join( header_text_list )
-        clean_text = extra_header_text + '. ' + clean_text
+            link['href'] = link_url
     
-    current_url_data = { "text": clean_text.strip() , "links_data": url_data }
+    return convert_html_to_markdown(html=soup.prettify())
 
-    return current_url_data
