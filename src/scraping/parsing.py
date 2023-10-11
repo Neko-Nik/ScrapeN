@@ -118,9 +118,6 @@ def parse_html( url , html_text , remove_header_footer = True ):
    
     # Remove all content within <script> tags
     cleaned_html_text = re.sub(r'<script.*?>.*?</script>', '', cleaned_html_text, flags=re.DOTALL)
-   
-    # Remove all content within <head> tags
-    cleaned_html_text = re.sub(r'<head.*?>.*?</head>', '', cleaned_html_text, flags=re.DOTALL)
 
     soup = BeautifulSoup(cleaned_html_text, 'html.parser')
 
