@@ -72,6 +72,12 @@ func scrapePage(url string, proxyURL string) (string, error) {
 // proxyDecoder - Decode the proxy string to get the username, password, ip and port
 func proxyDecoder(proxyStr string) (string, string, string) {
 	// the format is always http://username:password@ip:port so split it to get the username, password, ip and port
+	// Check if the proxy string is in the correct format if not return empty strings
+	if strings.Count(proxyStr, "@") != 1 || strings.Count(proxyStr, "://") != 1 || strings.Count(proxyStr, ":") != 3 {
+		return "", "", ""
+	}
+
+	// Processing the proxy string
 	proxyIPandPort := strings.Split(proxyStr, "@")[1]
 	proxyUserandPassword := strings.Split(proxyStr, "@")[0]
 

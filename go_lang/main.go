@@ -14,3 +14,14 @@ func main() {
 
 	r.Run(":8080") // listen and serve on
 }
+
+// To Build:
+// go build -tags netgo -ldflags '-s -w' -o app
+
+// To Run:
+// ./app
+
+// Each build param explained:
+// -tags netgo: This tells the Go compiler to use the netgo network implementation, which uses the pure Go DNS resolver.
+// -ldflags '-s -w': This tells the Go compiler to omit the symbol table and debug information from the executable.
+// -o app: This tells the Go compiler to name the executable app.
