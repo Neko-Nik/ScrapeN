@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scrapen-go-deployment
+spec:
+  replicas: 3  # Adjust the number of replicas as needed
+  selector:
+    matchLabels:
+      app: scrapen-go
+  template:
+    metadata:
+      labels:
+        app: scrapen-go
+    spec:
+      containers:
+      - name: scrapen-go-container
+        image: neko7nik/scrapen-go-internal:latest
+        ports:
+        - containerPort: 8086
+      imagePullSecrets:
+      - name: dockerhub-secret

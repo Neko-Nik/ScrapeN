@@ -12,7 +12,8 @@ func main() {
 
 	r.POST("/scrape", webScraper.ScrapeUrlWithTimeout)
 
-	r.Run(":8080") // listen and serve on
+	// This is Internal API so no need to use auth middleware
+	r.Run(":8086") // listen and serve on
 }
 
 // To Build:
